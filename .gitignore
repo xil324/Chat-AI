@@ -1,7 +1,4 @@
 .env
-.models
-.config
-./config/config.toml
-./config/config.go
-./models
-.node_modules
+config/
+models/
+node_modules/
