@@ -36,7 +36,7 @@ function ImageRecognition() {
 
     setMessages(prev => [...prev, {
       role: 'user',
-      content: `已上传图片: ${file.name}`,
+      content: `Uploaded image: ${file.name}`,
       imageUrl: imageUrl
     }])
 
@@ -53,7 +53,7 @@ function ImageRecognition() {
       })
 
       if (response.data && response.data.class_name) {
-        const aiText = `识别结果: ${response.data.class_name}`
+        const aiText = `Recognition result: ${response.data.class_name}`
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: aiText
@@ -61,14 +61,14 @@ function ImageRecognition() {
       } else {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: `[错误] ${response.data.status_msg || '识别失败'}`
+          content: `[Error] ${response.data.status_msg || 'Recognition failed'}`
         }])
       }
     } catch (err) {
       console.error('Upload error:', err)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `[错误] 无法连接到服务器或上传失败: ${err.message}`
+        content: `[Error] Unable to connect to server or upload failed: ${err.message}`
       }])
     } finally {
       URL.revokeObjectURL(imageUrl)
@@ -89,7 +89,7 @@ function ImageRecognition() {
       {/* Session List */}
       <Box sx={{ width: 280, height: '100vh', background: 'rgba(255, 255, 255, 0.95)', display: 'flex', flexDirection: 'column' }}>
         <Box sx={{ p: 2.5, textAlign: 'center', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(103, 194, 58, 0.06) 100%)', borderBottom: '1px solid rgba(0, 0, 0, 0.06)' }}>
-          <Typography sx={{ fontWeight: 600 }}>图像识别</Typography>
+          <Typography sx={{ fontWeight: 600 }}>Image Recognition</Typography>
         </Box>
         <Box sx={{ flex: 1, overflowY: 'auto' }}>
           <Box
@@ -100,7 +100,7 @@ function ImageRecognition() {
               fontWeight: 600
             }}
           >
-            图像识别助手
+            Image Recognition Assistant
           </Box>
         </Box>
       </Box>
@@ -109,8 +109,8 @@ function ImageRecognition() {
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Top Bar */}
         <Box sx={{ background: 'rgba(255, 255, 255, 0.95)', p: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Button onClick={() => navigate('/menu')}>← 返回</Button>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>AI 图像识别助手</Typography>
+          <Button onClick={() => navigate('/menu')}>← Back</Button>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>AI Image Recognition Assistant</Typography>
         </Box>
 
         {/* Messages */}
@@ -141,7 +141,7 @@ function ImageRecognition() {
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {message.role === 'user' ? '你' : 'AI'}:
+                  {message.role === 'user' ? 'You' : 'AI'}:
                 </Typography>
               </Box>
               <Box sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -150,7 +150,7 @@ function ImageRecognition() {
                   <Box
                     component="img"
                     src={message.imageUrl}
-                    alt="上传的图片"
+                    alt="Uploaded image"
                     sx={{
                       maxWidth: 250,
                       borderRadius: '12px',
@@ -194,7 +194,7 @@ function ImageRecognition() {
                 '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #653a91 100%)' }
               }}
             >
-              发送图片
+              Send Image
             </Button>
           </form>
         </Box>

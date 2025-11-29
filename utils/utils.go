@@ -17,14 +17,12 @@ func GetRandomNumbers(num int) string {
 
 	code := ""
 	for i := 0; i < num; i++ {
-		// 0~9随机数
 		digit := r.Intn(10)
 		code += strconv.Itoa(digit)
 	}
 	return code
 }
 
-// MD5 MD5加密
 func MD5(str string) string {
 	m := md5.New()
 	m.Write([]byte(str))
@@ -35,7 +33,6 @@ func GenerateUUID() string {
 	return uuid.New().String()
 }
 
-// 将 schema 消息转换为数据库可存储的格式
 func ConvertToModelMessage(sessionID string, userName string, msg *schema.Message) *model.Message {
 	return &model.Message{
 		SessionID: sessionID,
@@ -44,13 +41,13 @@ func ConvertToModelMessage(sessionID string, userName string, msg *schema.Messag
 	}
 }
 
-// 将数据库消息转换为 schema 消息（供 AI 使用）
+
 func ConvertToSchemaMessages(msgs []*model.Message) []*schema.Message {
 	schemaMsgs := make([]*schema.Message, 0, len(msgs))
 	for _, m := range msgs {
-		role := schema.Assistant
-		if m.IsUser == false {
-			role = schema.User
+		role := schema.User
+		if !m.IsUser {
+			role = schema.Assistant
 		}
 		schemaMsgs = append(schemaMsgs, &schema.Message{
 			Role:    role,

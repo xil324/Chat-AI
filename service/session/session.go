@@ -7,7 +7,6 @@ import (
 	"GopherAI/model"
 	"context"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/google/uuid"
@@ -31,8 +30,22 @@ func getModelConfig(modelType string) map[string]interface{} {
 		}
 		config["baseURL"] = baseURL
 		config["modelName"] = modelName
-	} else {
-		config["apiKey"] = "your-api-key"
+	} else if modelType == "3" {
+		apiKey := os.Getenv("GEMINI_API_KEY")
+		if apiKey == "" {
+			config["apiKey"] = ""
+		} else {
+			config["apiKey"] = apiKey
+		}
+		modelName := os.Getenv("GEMINI_MODEL_NAME")
+		if modelName == "" {
+			modelName = "gemini-1.5-flash"
+		}
+		config["modelName"] = modelName
+		baseURL := os.Getenv("GEMINI_BASE_URL")
+		if baseURL != "" {
+			config["baseURL"] = baseURL
+		}
 	}
 
 	return config
@@ -83,85 +96,6 @@ func CreateSessionAndSendMessage(userName string, userQuestion string, modelType
 	return createdSession.ID, aiResponse.Content, code.CodeSuccess
 }
 
-
-func CreateStreamSessionOnly(userName string, userQuestion string) (string, code.Code) {
-	newSession := &model.Session{
-		ID:       uuid.New().String(),
-		UserName: userName,
-		Title:    userQuestion,
-	}
-	createdSession, err := session.CreateSession(newSession)
-	if err != nil {
-		log.Println("CreateStreamSessionOnly CreateSession error:", err)
-		return "", code.CodeServerBusy
-	}
-	return createdSession.ID, code.CodeSuccess
-}
-
-
-func StreamMessageToExistingSession(userName string, sessionID string, userQuestion string, modelType string, writer http.ResponseWriter) code.Code {
-	flusher, ok := writer.(http.Flusher)
-	if !ok {
-		log.Println("StreamMessageToExistingSession: streaming unsupported")
-		return code.CodeServerBusy
-	}
-
-	manager := aihelper.GetGlobalManager()
-	config := getModelConfig(modelType)
-	helper, err := manager.GetOrCreateAIHelper(userName, sessionID, modelType, config)
-	if err != nil {
-		log.Printf("StreamMessageToExistingSession GetOrCreateAIHelper error: userName=%s, sessionID=%s, modelType=%s, error=%v", userName, sessionID, modelType, err)
-		return code.AIModelFail
-	}
-
-	cb := func(msg string) {
-		log.Printf("[SSE] Sending chunk: %s (len=%d)\n", msg, len(msg))
-		_, err := writer.Write([]byte("data: " + msg + "\n\n"))
-		if err != nil {
-			log.Println("[SSE] Write error:", err)
-			return
-		}
-		flusher.Flush()
-		log.Println("[SSE] Flushed")
-	}
-
-	_, err_ := helper.StreamResponse(userName, ctx, cb, userQuestion)
-	if err_ != nil {
-		log.Printf("StreamMessageToExistingSession StreamResponse error: userName=%s, sessionID=%s, modelType=%s, error=%v", userName, sessionID, modelType, err_)
-		return code.AIModelFail
-	}
-
-
-	_, err = writer.Write([]byte("data: [DONE]\n\n"))
-	if err != nil {
-		log.Println("StreamMessageToExistingSession write DONE error:", err)
-		return code.AIModelFail
-	}
-	flusher.Flush()
-
-	return code.CodeSuccess
-}
-
-
-func CreateStreamSessionAndSendMessage(userName string, userQuestion string, modelType string, writer http.ResponseWriter) (string, code.Code) {
-
-	sessionID, code_ := CreateStreamSessionOnly(userName, userQuestion)
-	if code_ != code.CodeSuccess {
-		return "", code_
-	}
-
-
-	code_ = StreamMessageToExistingSession(userName, sessionID, userQuestion, modelType, writer)
-	if code_ != code.CodeSuccess {
-
-		return sessionID, code_
-	}
-
-	return sessionID, code.CodeSuccess
-}
-
-
-
 func ChatSend(userName string, sessionID string, userQuestion string, modelType string) (string, code.Code) {
 
 	manager := aihelper.GetGlobalManager()
@@ -200,9 +134,4 @@ func GetChatHistory(userName string, sessionID string) ([]model.History, code.Co
 	}
 
 	return history, code.CodeSuccess
-}
-
-func ChatStreamSend(userName string, sessionID string, userQuestion string, modelType string, writer http.ResponseWriter) code.Code {
-
-	return StreamMessageToExistingSession(userName, sessionID, userQuestion, modelType, writer)
 }

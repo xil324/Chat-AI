@@ -30,11 +30,6 @@ func GetGlobalFactory() *AIModelFactory {
 
 
 func (f *AIModelFactory) registerCreators() {
-
-	f.creators["1"] = func(ctx context.Context, config map[string]interface{}) (AIModel, error) {
-		return NewOpenAIModel(ctx)
-	}
-
 	f.creators["2"] = func(ctx context.Context, config map[string]interface{}) (AIModel, error) {
 		baseURL, _ := config["baseURL"].(string)
 		modelName, ok := config["modelName"].(string)
@@ -42,6 +37,13 @@ func (f *AIModelFactory) registerCreators() {
 			return nil, fmt.Errorf("Ollama model requires modelName")
 		}
 		return NewOllamaModel(ctx, baseURL, modelName)
+	}
+
+	f.creators["3"] = func(ctx context.Context, config map[string]interface{}) (AIModel, error) {
+		apiKey, _ := config["apiKey"].(string)
+		modelName, _ := config["modelName"].(string)
+		baseURL, _ := config["baseURL"].(string)
+		return NewGeminiModel(ctx, apiKey, modelName, baseURL)
 	}
 }
 

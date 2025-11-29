@@ -8,8 +8,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  FormControlLabel,
-  Checkbox,
   Typography,
   IconButton,
   Snackbar,
@@ -27,7 +25,6 @@ function AIChat() {
   const [inputMessage, setInputMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState('2')
-  const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState('')
   const messagesRef = useRef(null)
   const messageInputRef = useRef(null)
@@ -152,159 +149,7 @@ function AIChat() {
     }
   }
 
-  const handleStreaming = async (question) => {
-    const aiMessage = {
-      role: 'assistant',
-      content: '',
-      meta: { status: 'streaming' }
-    }
-    const aiMessageIndex = currentMessages.length
-    setCurrentMessages(prev => [...prev, aiMessage])
-
-    const isNewSession = tempSession || !currentSessionId || currentSessionId === 'temp'
-    if (!isNewSession && currentSessionId && sessions[currentSessionId]) {
-      setSessions(prev => ({
-        ...prev,
-        [currentSessionId]: {
-          ...prev[currentSessionId],
-          messages: [...(prev[currentSessionId].messages || []), { role: 'assistant', content: '' }]
-        }
-      }))
-    }
-
-    const url = tempSession
-      ? '/api/AI/chat/send-stream-new-session'
-      : '/api/AI/chat/send-stream'
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-    }
-
-    const body = isNewSession
-      ? { question, modelType: selectedModel }
-      : { question, modelType: selectedModel, sessionId: currentSessionId }
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body)
-      })
-
-      if (!response.ok) {
-        setLoading(false)
-        throw new Error('Network response was not ok')
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          const trimmedLine = line.trim()
-          if (!trimmedLine) continue
-
-          if (trimmedLine.startsWith('data:')) {
-            const data = trimmedLine.slice(5).trim()
-
-            if (data === '[DONE]') {
-              setLoading(false)
-              setCurrentMessages(prev => {
-                const updated = [...prev]
-                updated[aiMessageIndex] = { ...updated[aiMessageIndex], meta: { status: 'done' } }
-                return updated
-              })
-            } else if (data.startsWith('{')) {
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.sessionId) {
-                  const newSid = String(parsed.sessionId)
-                  if (isNewSession) {
-                    setSessions(prev => ({
-                      ...prev,
-                      [newSid]: {
-                        id: newSid,
-                        name: 'new session',
-                        messages: [...currentMessages]
-                      }
-                    }))
-                    setCurrentSessionId(newSid)
-                    setTempSession(false)
-                  }
-                }
-              } catch (e) {
-                setCurrentMessages(prev => {
-                  const updated = [...prev]
-                  updated[aiMessageIndex] = {
-                    ...updated[aiMessageIndex],
-                    content: updated[aiMessageIndex].content + data
-                  }
-                  return updated
-                })
-              }
-            } else {
-              setCurrentMessages(prev => {
-                const updated = [...prev]
-                updated[aiMessageIndex] = {
-                  ...updated[aiMessageIndex],
-                  content: updated[aiMessageIndex].content + data
-                }
-                return updated
-              })
-            }
-
-            requestAnimationFrame(() => {
-              scrollToBottom()
-            })
-          }
-        }
-      }
-
-      setLoading(false)
-      setCurrentMessages(prev => {
-        const updated = [...prev]
-        updated[aiMessageIndex] = { ...updated[aiMessageIndex], meta: { status: 'done' } }
-        return updated
-      })
-
-      if (!isNewSession && currentSessionId && sessions[currentSessionId]) {
-        setSessions(prev => {
-          const updated = { ...prev }
-          const sessMsgs = updated[currentSessionId].messages
-          if (Array.isArray(sessMsgs) && sessMsgs.length) {
-            const lastIndex = sessMsgs.length - 1
-            if (sessMsgs[lastIndex] && sessMsgs[lastIndex].role === 'assistant') {
-              sessMsgs[lastIndex].content = currentMessages[aiMessageIndex].content
-            }
-          }
-          return updated
-        })
-      }
-    } catch (err) {
-      console.error('Stream error:', err)
-      setLoading(false)
-      setCurrentMessages(prev => {
-        const updated = [...prev]
-        updated[aiMessageIndex] = { ...updated[aiMessageIndex], meta: { status: 'error' } }
-        return updated
-      })
-      setError('Streaming error')
-    }
-  }
-
   const handleNormal = async (question) => {
-    // Use new-session endpoint if tempSession is true OR if currentSessionId is null/undefined
     if (tempSession || !currentSessionId || currentSessionId === 'temp') {
       const response = await api.post('/AI/chat/send-new-session', {
         question,
@@ -378,11 +223,7 @@ function AIChat() {
 
     try {
       setLoading(true)
-      if (isStreaming) {
-        await handleStreaming(currentInput)
-      } else {
-        await handleNormal(currentInput)
-      }
+      await handleNormal(currentInput)
     } catch (err) {
       console.error('Send message error:', err)
       setError('Failed to send, please try again')
@@ -392,9 +233,7 @@ function AIChat() {
       }
       setCurrentMessages(prev => prev.slice(0, -1))
     } finally {
-      if (!isStreaming) {
-        setLoading(false)
-      }
+      setLoading(false)
       setTimeout(scrollToBottom, 100)
     }
   }
@@ -470,13 +309,9 @@ function AIChat() {
             <InputLabel>Select Model</InputLabel>
             <Select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} label="Select Model">
               <MenuItem value="2">Ollama (Local)</MenuItem>
-              <MenuItem value="1">OpenAI/DashScope</MenuItem>
+              <MenuItem value="3">Google Gemini</MenuItem>
             </Select>
           </FormControl>
-          <FormControlLabel
-            control={<Checkbox checked={isStreaming} onChange={(e) => setIsStreaming(e.target.checked)} />}
-            label="Streaming Response"
-          />
         </Box>
 
         {/* Messages */}
@@ -513,9 +348,6 @@ function AIChat() {
                   <IconButton size="small" onClick={() => playTTS(message.content)}>
                     <VolumeUpIcon fontSize="small" />
                   </IconButton>
-                )}
-                {message.meta?.status === 'streaming' && (
-                  <Typography variant="body2" sx={{ color: '#999' }}>··</Typography>
                 )}
               </Box>
               <Box

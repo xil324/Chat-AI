@@ -32,6 +32,9 @@ func NewAIHelper(model_ AIModel, SessionID string) *AIHelper {
 }
 
 func (a *AIHelper) AddMessage(Content string, UserName string, IsUser bool, Save bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	userMsg := model.Message{
 		SessionID: a.SessionID,
 		Content:   Content,
@@ -61,12 +64,18 @@ func (a *AIHelper) GetMessages() []*model.Message {
 
 func (a *AIHelper) GenerateResponse(userName string, ctx context.Context, userQuestion string) (*model.Message, error) {
 
-
-	a.AddMessage(userQuestion, userName, true, true)
-
-	a.mu.RLock()
+	a.mu.Lock()
+	userMsg := model.Message{
+		SessionID: a.SessionID,
+		Content:   userQuestion,
+		UserName:  userName,
+		IsUser:    true,
+	}
+	a.messages = append(a.messages, &userMsg)
 	messages := utils.ConvertToSchemaMessages(a.messages)
-	a.mu.RUnlock()
+	a.mu.Unlock()
+
+	a.saveFunc(&userMsg)
 
 	schemaMsg, err := a.model.GenerateResponse(ctx, messages)
 	if err != nil {
@@ -79,32 +88,6 @@ func (a *AIHelper) GenerateResponse(userName string, ctx context.Context, userQu
 
 	return modelMsg, nil
 }
-
-func (a *AIHelper) StreamResponse(userName string, ctx context.Context, cb StreamCallback, userQuestion string) (*model.Message, error) {
-
-	a.AddMessage(userQuestion, userName, true, true)
-
-	a.mu.RLock()
-	messages := utils.ConvertToSchemaMessages(a.messages)
-	a.mu.RUnlock()
-
-	content, err := a.model.StreamResponse(ctx, messages, cb)
-	if err != nil {
-		return nil, err
-	}
-
-	modelMsg := &model.Message{
-		SessionID: a.SessionID,
-		UserName:  userName,
-		Content:   content,
-		IsUser:    false,
-	}
-
-	a.AddMessage(modelMsg.Content, userName, false, true)
-
-	return modelMsg, nil
-}
-
 
 func (a *AIHelper) GetModelType() string {
 	return a.model.GetModelType()
