@@ -48,16 +48,10 @@ function Login() {
         username: formData.username,
         password: formData.password
       })
-
-      if (response.data.status_code === 1000) {
-        localStorage.setItem('token', response.data.token)
-        navigate('/menu')
-      } else {
-        setError(response.data.status_msg || 'Login failed')
-      }
+      localStorage.setItem('token', response.data.token)
+      navigate('/menu')
     } catch (err) {
-      console.error('Login error:', err)
-      setError('Login failed, please try again')
+      setError(err.response?.data?.error || 'Login failed, please try again')
     } finally {
       setLoading(false)
     }

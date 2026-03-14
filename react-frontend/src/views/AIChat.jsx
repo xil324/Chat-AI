@@ -61,8 +61,8 @@ function AIChat() {
 
   const loadSessions = async () => {
     try {
-      const response = await api.get('/AI/chat/sessions')
-      if (response.data && response.data.status_code === 1000 && Array.isArray(response.data.sessions)) {
+      const response = await api.get('/chat/sessions')
+      if (response.data && Array.isArray(response.data.sessions)) {
         const sessionMap = {}
         response.data.sessions.forEach(s => {
           const sid = String(s.sessionId)
@@ -95,8 +95,8 @@ function AIChat() {
 
     if (!sessions[sessionId]?.messages || sessions[sessionId].messages.length === 0) {
       try {
-        const response = await api.post('/AI/chat/history', { sessionId: String(sessionId) })
-        if (response.data && response.data.status_code === 1000 && Array.isArray(response.data.history)) {
+        const response = await api.post('/chat/history', { sessionId: String(sessionId) })
+        if (response.data && Array.isArray(response.data.history)) {
           const messages = response.data.history.map(item => ({
             role: item.is_user ? 'user' : 'assistant',
             content: item.content
@@ -125,8 +125,8 @@ function AIChat() {
       return
     }
     try {
-      const response = await api.post('/AI/chat/history', { sessionId: currentSessionId })
-      if (response.data && response.data.status_code === 1000 && Array.isArray(response.data.history)) {
+      const response = await api.post('/chat/history', { sessionId: currentSessionId })
+      if (response.data && Array.isArray(response.data.history)) {
         const messages = response.data.history.map(item => ({
           role: item.is_user ? 'user' : 'assistant',
           content: item.content
@@ -151,57 +151,45 @@ function AIChat() {
 
   const handleNormal = async (question) => {
     if (tempSession || !currentSessionId || currentSessionId === 'temp') {
-      const response = await api.post('/AI/chat/send-new-session', {
+      const response = await api.post('/chat/send-new-session', {
         question,
         modelType: selectedModel
       })
-      if (response.data && response.data.status_code === 1000) {
-        const sessionId = String(response.data.sessionId)
-        const aiMessage = {
-          role: 'assistant',
-          content: response.data.Information || ''
-        }
-
-        setSessions(prev => ({
-          ...prev,
-          [sessionId]: {
-            id: sessionId,
-            name: 'new session',
-            messages: [{ role: 'user', content: question }, aiMessage]
-          }
-        }))
-        setCurrentSessionId(sessionId)
-        setTempSession(false)
-        setCurrentMessages([{ role: 'user', content: question }, aiMessage])
-      } else {
-        setError(response.data?.status_msg || 'Failed to send')
-        setCurrentMessages(prev => prev.slice(0, -1))
+      const sessionId = String(response.data.sessionId)
+      const aiMessage = {
+        role: 'assistant',
+        content: response.data.message || ''
       }
+      setSessions(prev => ({
+        ...prev,
+        [sessionId]: {
+          id: sessionId,
+          name: question.slice(0, 30),
+          messages: [{ role: 'user', content: question }, aiMessage]
+        }
+      }))
+      setCurrentSessionId(sessionId)
+      setTempSession(false)
+      setCurrentMessages([{ role: 'user', content: question }, aiMessage])
     } else {
       const sessionMsgs = [...(sessions[currentSessionId]?.messages || [])]
       sessionMsgs.push({ role: 'user', content: question })
 
-      const response = await api.post('/AI/chat/send', {
+      const response = await api.post('/chat/send', {
         question,
         modelType: selectedModel,
         sessionId: currentSessionId
       })
-      if (response.data && response.data.status_code === 1000) {
-        const aiMessage = { role: 'assistant', content: response.data.Information || '' }
-        sessionMsgs.push(aiMessage)
-        setSessions(prev => ({
-          ...prev,
-          [currentSessionId]: {
-            ...prev[currentSessionId],
-            messages: sessionMsgs
-          }
-        }))
-        setCurrentMessages([...sessionMsgs])
-      } else {
-        setError(response.data?.status_msg || 'Failed to send')
-        sessionMsgs.pop()
-        setCurrentMessages(prev => prev.slice(0, -1))
-      }
+      const aiMessage = { role: 'assistant', content: response.data.message || '' }
+      sessionMsgs.push(aiMessage)
+      setSessions(prev => ({
+        ...prev,
+        [currentSessionId]: {
+          ...prev[currentSessionId],
+          messages: sessionMsgs
+        }
+      }))
+      setCurrentMessages([...sessionMsgs])
     }
   }
 
@@ -309,7 +297,7 @@ function AIChat() {
             <InputLabel>Select Model</InputLabel>
             <Select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} label="Select Model">
               <MenuItem value="2">Ollama (Local)</MenuItem>
-              <MenuItem value="3">Google Gemini</MenuItem>
+              <MenuItem value="3">Claude</MenuItem>
             </Select>
           </FormControl>
         </Box>

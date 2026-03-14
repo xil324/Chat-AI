@@ -42,24 +42,19 @@ function Register() {
 
     try {
       setCodeLoading(true)
-      const response = await api.post('/user/captcha', { email: formData.email })
-      if (response.data.status_code === 1000) {
-        setCountdown(60)
-        const timer = setInterval(() => {
-          setCountdown((prev) => {
-            if (prev <= 1) {
-              clearInterval(timer)
-              return 0
-            }
-            return prev - 1
-          })
-        }, 1000)
-      } else {
-        setError(response.data.status_msg || 'Failed to send captcha')
-      }
+      await api.post('/user/captcha', { email: formData.email })
+      setCountdown(60)
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
     } catch (err) {
-      console.error('Send code error:', err)
-      setError('Failed to send captcha, please try again')
+      setError(err.response?.data?.error || 'Failed to send captcha, please try again')
     } finally {
       setCodeLoading(false)
     }
@@ -85,20 +80,14 @@ function Register() {
 
     try {
       setLoading(true)
-      const response = await api.post('/user/register', {
+      await api.post('/user/register', {
         email: formData.email,
         captcha: formData.captcha,
         password: formData.password
       })
-
-      if (response.data.status_code === 1000) {
-        navigate('/login')
-      } else {
-        setError(response.data.status_msg || 'Failed to register')
-      }
+      navigate('/login')
     } catch (err) {
-      console.error('Register error:', err)
-      setError('Failed to register, please try again')
+      setError(err.response?.data?.error || 'Failed to register, please try again')
     } finally {
       setLoading(false)
     }

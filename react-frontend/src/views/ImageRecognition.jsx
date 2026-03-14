@@ -61,7 +61,7 @@ function ImageRecognition() {
       } else {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: `[Error] ${response.data.status_msg || 'Recognition failed'}`
+          content: '[Error] Recognition failed'
         }])
       }
     } catch (err) {
