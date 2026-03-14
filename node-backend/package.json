@@ -1,0 +1,24 @@
+{
+  "name": "chat-ai-backend",
+  "version": "1.0.0",
+  "description": "Chat-AI Node.js backend with Claude API",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.15",
+    "onnxruntime-node": "^1.20.1",
+    "uuid": "^10.0.0"
+  }
+}
