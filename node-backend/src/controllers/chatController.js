@@ -20,7 +20,8 @@ export async function handleSendNewSession(req, res) {
     const result = await sendNewSession(userName, question, modelType);
     return res.status(201).json(result);
   } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message });
+    const httpStatus = err.status && err.status !== 401 && err.status !== 403 ? err.status : 500;
+    return res.status(httpStatus).json({ error: err.message });
   }
 }
 
@@ -34,7 +35,8 @@ export async function handleSendMessage(req, res) {
     const result = await sendMessage(userName, sessionId, question, modelType);
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message });
+    const httpStatus = err.status && err.status !== 401 && err.status !== 403 ? err.status : 500;
+    return res.status(httpStatus).json({ error: err.message });
   }
 }
 

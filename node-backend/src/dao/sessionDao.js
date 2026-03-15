@@ -12,3 +12,11 @@ export async function createSession(sessionData) {
   const session = new Session(sessionData);
   return session.save();
 }
+
+export async function updateAttachedDocument(sessionId, documentId) {
+  return Session.updateOne({ id: sessionId }, { attached_document_id: documentId });
+}
+
+export async function clearAttachedDocument(sessionId) {
+  return Session.updateOne({ id: sessionId }, { attached_document_id: null });
+}

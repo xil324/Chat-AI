@@ -4,7 +4,6 @@ import Login from './views/Login'
 import Register from './views/Register'
 import Menu from './views/Menu'
 import AIChat from './views/AIChat'
-import ImageRecognition from './views/ImageRecognition'
 import PrivateRoute from './components/PrivateRoute'
 
 function App() {
@@ -15,7 +14,6 @@ function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/menu" element={<PrivateRoute><Menu /></PrivateRoute>} />
       <Route path="/ai-chat" element={<PrivateRoute><AIChat /></PrivateRoute>} />
-      <Route path="/image-recognition" element={<PrivateRoute><ImageRecognition /></PrivateRoute>} />
     </Routes>
   )
 }

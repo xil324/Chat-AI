@@ -14,6 +14,9 @@ import {
   Alert
 } from '@mui/material'
 import VolumeUpIcon from '@mui/icons-material/VolumeUp'
+import FolderIcon from '@mui/icons-material/Folder'
+import Chip from '@mui/material/Chip'
+import PDFLibrary from '../components/PDFLibrary'
 import api from '../utils/api'
 
 function AIChat() {
@@ -28,6 +31,8 @@ function AIChat() {
   const [error, setError] = useState('')
   const messagesRef = useRef(null)
   const messageInputRef = useRef(null)
+  const [pdfLibraryOpen, setPdfLibraryOpen] = useState(false)
+  const [attachedDoc, setAttachedDoc] = useState(null) // { id, filename } | null
 
   const renderMarkdown = (text) => {
     if (!text && text !== '') return ''
@@ -69,6 +74,8 @@ function AIChat() {
           sessionMap[sid] = {
             id: sid,
             name: s.name || `Session ${sid}`,
+            attachedDocumentId: s.attachedDocumentId || null,
+            attachedDocumentName: s.attachedDocumentName || '',
             messages: []
           }
         })
@@ -83,6 +90,7 @@ function AIChat() {
     setCurrentSessionId('temp')
     setTempSession(true)
     setCurrentMessages([])
+    setAttachedDoc(null)
     if (messageInputRef.current) {
       messageInputRef.current.focus()
     }
@@ -92,6 +100,13 @@ function AIChat() {
     if (!sessionId) return
     setCurrentSessionId(String(sessionId))
     setTempSession(false)
+    // Sync attached document from session data
+    const sessionData = sessions[String(sessionId)]
+    if (sessionData?.attachedDocumentId) {
+      setAttachedDoc({ id: sessionData.attachedDocumentId, filename: sessionData.attachedDocumentName || '' })
+    } else {
+      setAttachedDoc(null)
+    }
 
     if (!sessions[sessionId]?.messages || sessions[sessionId].messages.length === 0) {
       try {
@@ -300,6 +315,20 @@ function AIChat() {
               <MenuItem value="3">Claude</MenuItem>
             </Select>
           </FormControl>
+          {/* PDF Library button */}
+          <IconButton onClick={() => setPdfLibraryOpen(true)} title="PDF Library" size="small">
+            <FolderIcon />
+          </IconButton>
+
+          {/* Attached PDF indicator — open library to detach */}
+          {attachedDoc && (
+            <Chip
+              label={`📄 ${attachedDoc.filename}`}
+              size="small"
+              onDelete={() => setPdfLibraryOpen(true)}
+              sx={{ maxWidth: 200, fontSize: 11 }}
+            />
+          )}
         </Box>
 
         {/* Messages */}
@@ -380,6 +409,38 @@ function AIChat() {
         </Box>
       </Box>
 
+      <PDFLibrary
+        open={pdfLibraryOpen}
+        onClose={() => setPdfLibraryOpen(false)}
+        sessionId={tempSession ? null : currentSessionId}
+        attachedDocId={attachedDoc?.id || null}
+        onAttach={(doc) => {
+          setAttachedDoc(doc)
+          if (currentSessionId && !tempSession) {
+            setSessions(prev => ({
+              ...prev,
+              [currentSessionId]: {
+                ...prev[currentSessionId],
+                attachedDocumentId: doc.id,
+                attachedDocumentName: doc.filename,
+              }
+            }))
+          }
+        }}
+        onDetach={() => {
+          setAttachedDoc(null)
+          if (currentSessionId && !tempSession) {
+            setSessions(prev => ({
+              ...prev,
+              [currentSessionId]: {
+                ...prev[currentSessionId],
+                attachedDocumentId: null,
+                attachedDocumentName: '',
+              }
+            }))
+          }
+        }}
+      />
       <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
         <Alert onClose={() => setError('')} severity="error">
           {error}

@@ -1,44 +1,50 @@
-import { createAIModel } from './AIModelFactory.js';
-import { AIHelper } from './AIHelper.js';
+import { createAIModel } from "./AIModelFactory.js";
+import { AIHelper } from "./AIHelper.js";
 
 /**
  * Singleton that holds all in-memory AIHelper instances.
  * Map structure: userName -> sessionId -> AIHelper
  */
 class AIHelperManager {
-  constructor() {
-    this.helpers = new Map(); // Map<userName, Map<sessionId, AIHelper>>
-  }
+	constructor() {
+		this.helpers = new Map(); // Map<userName, Map<sessionId, AIHelper>>
+	}
 
-  getOrCreate(userName, sessionId, modelType) {
-    if (!this.helpers.has(userName)) {
-      this.helpers.set(userName, new Map());
-    }
-    const userHelpers = this.helpers.get(userName);
+	getOrCreate(userName, sessionId, modelType) {
+		if (!this.helpers.has(userName)) {
+			this.helpers.set(userName, new Map());
+		}
+		const userHelpers = this.helpers.get(userName);
 
-    if (!userHelpers.has(sessionId)) {
-      const model = createAIModel(modelType);
-      userHelpers.set(sessionId, new AIHelper(model, sessionId));
-    }
-    return userHelpers.get(sessionId);
-  }
+		const existing = userHelpers.get(sessionId);
+		if (existing && existing.modelType === modelType) {
+			return existing;
+		}
+		const model = createAIModel(modelType);
+		const helper = new AIHelper(model, sessionId, modelType);
+		if (existing) {
+			helper.history = existing.history; // preserve conversation history
+		}
+		userHelpers.set(sessionId, helper);
+		return helper;
+	}
 
-  get(userName, sessionId) {
-    return this.helpers.get(userName)?.get(sessionId) || null;
-  }
+	get(userName, sessionId) {
+		return this.helpers.get(userName)?.get(sessionId) || null;
+	}
 
-  getSessions(userName) {
-    const userHelpers = this.helpers.get(userName);
-    if (!userHelpers) return [];
-    return Array.from(userHelpers.keys());
-  }
+	getSessions(userName) {
+		const userHelpers = this.helpers.get(userName);
+		if (!userHelpers) return [];
+		return Array.from(userHelpers.keys());
+	}
 
-  // Called on startup to load history from DB without making AI calls
-  loadMessage(userName, sessionId, modelType, role, content) {
-    const helper = this.getOrCreate(userName, sessionId, modelType);
-    helper.loadMessage(role, content);
-    return helper;
-  }
+	// Called on startup to load history from DB without making AI calls
+	loadMessage(userName, sessionId, modelType, role, content) {
+		const helper = this.getOrCreate(userName, sessionId, modelType);
+		helper.loadMessage(role, content);
+		return helper;
+	}
 }
 
 export const aiHelperManager = new AIHelperManager();

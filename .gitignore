@@ -3,3 +3,5 @@ config/
 models/
 node_modules/
 CLAUDE.md
+.claude/
+elasticsearch*.tar.gz

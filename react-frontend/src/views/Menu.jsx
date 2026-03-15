@@ -14,7 +14,6 @@ import {
   DialogActions
 } from '@mui/material'
 import ChatIcon from '@mui/icons-material/Chat'
-import CameraAltIcon from '@mui/icons-material/CameraAlt'
 
 function Menu() {
   const navigate = useNavigate()
@@ -74,7 +73,7 @@ function Menu() {
         }}
       >
         <Grid container spacing={4} sx={{ maxWidth: 900 }}>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12}>
             <Card
               sx={{
                 cursor: 'pointer',
@@ -97,33 +96,6 @@ function Menu() {
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Chat with AI
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Card
-              sx={{
-                cursor: 'pointer',
-                background: 'rgba(255, 255, 255, 0.95)',
-                backdropFilter: 'blur(15px)',
-                borderRadius: '20px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                '&:hover': {
-                  transform: 'translateY(-15px) scale(1.05)',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.2)'
-                }
-              }}
-              onClick={() => navigate('/image-recognition')}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 5 }}>
-                <CameraAltIcon sx={{ fontSize: 48, color: '#67c23a', mb: 2 }} />
-                <Typography variant="h5" sx={{ mb: 1, fontWeight: 600 }}>
-                  Image Recognition
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Upload image to AI recognition
                 </Typography>
               </CardContent>
             </Card>
