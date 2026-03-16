@@ -134,36 +134,6 @@ function AIChat() {
     setTimeout(scrollToBottom, 100)
   }
 
-  const syncHistory = async () => {
-    if (!currentSessionId || tempSession) {
-      setError('Please select an existing session to sync')
-      return
-    }
-    try {
-      const response = await api.post('/chat/history', { sessionId: currentSessionId })
-      if (response.data && Array.isArray(response.data.history)) {
-        const messages = response.data.history.map(item => ({
-          role: item.is_user ? 'user' : 'assistant',
-          content: item.content
-        }))
-        setSessions(prev => ({
-          ...prev,
-          [currentSessionId]: {
-            ...prev[currentSessionId],
-            messages
-          }
-        }))
-        setCurrentMessages([...messages])
-        setTimeout(scrollToBottom, 100)
-      } else {
-        setError('Unable to get history data')
-      }
-    } catch (err) {
-      console.error('Sync history error:', err)
-      setError('Failed to get history data')
-    }
-  }
-
   const handleNormal = async (question) => {
     if (tempSession || !currentSessionId || currentSessionId === 'temp') {
       const response = await api.post('/chat/send-new-session', {
@@ -252,159 +222,166 @@ function AIChat() {
   const sessionsList = Object.values(sessions)
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-      {/* Session List */}
-      <Box sx={{ width: 280, height: '100vh', background: 'rgba(255, 255, 255, 0.95)', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 2.5, textAlign: 'center', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(103, 194, 58, 0.06) 100%)', borderBottom: '1px solid rgba(0, 0, 0, 0.06)' }}>
-          <Typography sx={{ mb: 1.5, fontWeight: 600 }}>Conversations</Typography>
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={createNewSession}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #653a91 100%)' }
-            }}
-          >
-            ＋ New Chat
+    <Box sx={{ height: '100vh', display: 'flex', background: '#000' }}>
+      {/* Sidebar */}
+      <Box sx={{ width: 240, height: '100vh', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column' }}>
+        {/* Logo */}
+        <Box sx={{ px: 3, py: 2.5, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: '1rem', letterSpacing: '-0.5px' }}>Sixi AI</Typography>
+          <Button onClick={() => navigate('/menu')} sx={{ color: '#999', textTransform: 'none', minWidth: 0, p: 0.5, fontSize: '0.75rem', '&:hover': { color: '#fff', background: 'transparent' } }}>
+            ← Menu
           </Button>
         </Box>
-        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+
+        {/* New Chat */}
+        <Box sx={{ p: 2 }}>
+          <Button fullWidth onClick={createNewSession} variant="outlined"
+            sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#888', borderRadius: '10px', textTransform: 'none', fontSize: '0.875rem', py: 1,
+              '&:hover': { borderColor: 'rgba(255,255,255,0.3)', color: '#fff', background: 'transparent' } }}>
+            + New chat
+          </Button>
+        </Box>
+
+        {/* Sessions */}
+        <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5 }}>
+          <Typography sx={{ color: '#777', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', px: 1.5, mb: 1 }}>Recent</Typography>
           {sessionsList.map(session => (
-            <Box
-              key={session.id}
-              onClick={() => switchSession(session.id)}
-              sx={{
-                p: 2,
-                cursor: 'pointer',
-                borderBottom: '1px solid rgba(0, 0, 0, 0.03)',
-                background: currentSessionId === session.id
-                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                  : 'transparent',
-                color: currentSessionId === session.id ? 'white' : '#2c3e50',
-                '&:hover': {
-                  background: currentSessionId === session.id
-                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                    : 'rgba(102, 126, 234, 0.06)'
-                }
-              }}
-            >
-              {session.name || `Conversation ${session.id}`}
+            <Box key={session.id} onClick={() => switchSession(session.id)}
+              sx={{ px: 1.5, py: 1.2, mb: 0.5, cursor: 'pointer', borderRadius: '8px',
+                background: currentSessionId === session.id ? 'rgba(255,255,255,0.08)' : 'transparent',
+                color: currentSessionId === session.id ? '#fff' : '#bbb',
+                fontSize: '0.83rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                '&:hover': { background: 'rgba(255,255,255,0.05)', color: '#ddd' }
+              }}>
+              {session.name || `Chat ${session.id.slice(0, 8)}`}
             </Box>
           ))}
         </Box>
       </Box>
 
-      {/* Chat Section */}
+      {/* Main chat area */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* Top Bar */}
-        <Box sx={{ background: 'rgba(255, 255, 255, 0.95)', p: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Button onClick={() => navigate('/menu')}>← Back</Button>
-          <Button
-            onClick={syncHistory}
-            disabled={!currentSessionId || tempSession}
-            variant="contained"
-            size="small"
-          >
-            Sync History Data
-          </Button>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Select Model</InputLabel>
-            <Select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} label="Select Model">
-              <MenuItem value="2">Ollama (Local)</MenuItem>
-              <MenuItem value="3">Claude</MenuItem>
-            </Select>
-          </FormControl>
-          {/* PDF Library button */}
-          <IconButton onClick={() => setPdfLibraryOpen(true)} title="PDF Library" size="small">
-            <FolderIcon />
-          </IconButton>
 
-          {/* Attached PDF indicator — open library to detach */}
-          {attachedDoc && (
-            <Chip
-              label={`📄 ${attachedDoc.filename}`}
-              size="small"
-              onDelete={() => setPdfLibraryOpen(true)}
-              sx={{ maxWidth: 200, fontSize: 11 }}
-            />
-          )}
-        </Box>
-
-        {/* Messages */}
-        <Box
-          ref={messagesRef}
-          sx={{
-            flex: 1,
-            overflowY: 'auto',
-            p: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2
-          }}
-        >
-          {currentMessages.map((message, index) => (
-            <Box
-              key={index}
-              sx={{
-                maxWidth: '70%',
-                p: '14px 18px',
-                borderRadius: '18px',
-                alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                background: message.role === 'user'
-                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                  : 'rgba(255, 255, 255, 0.95)',
-                color: message.role === 'user' ? 'white' : '#2c3e50'
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {message.role === 'user' ? 'You' : 'AI'}:
-                </Typography>
-                {message.role === 'assistant' && (
-                  <IconButton size="small" onClick={() => playTTS(message.content)}>
-                    <VolumeUpIcon fontSize="small" />
-                  </IconButton>
-                )}
+{/* Messages */}
+        <Box ref={messagesRef} sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {currentMessages.length === 0 && !loading && (
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 400, px: 4, textAlign: 'center' }}>
+              <Box sx={{ width: 56, height: 56, borderRadius: '16px', background: 'rgba(99,179,140,0.12)', border: '1px solid rgba(99,179,140,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3, fontSize: '1.5rem', color: '#63b38c', fontWeight: 700 }}>
+                S
               </Box>
-              <Box
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
-                sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-              />
+              <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '1.4rem', letterSpacing: '-0.5px', mb: 1 }}>
+                How can I help you?
+              </Typography>
+              <Typography sx={{ color: '#777', fontSize: '0.9rem', maxWidth: 360 }}>
+                Start a conversation below. {attachedDoc ? `Chatting with context from "${attachedDoc.filename}".` : 'You can attach a PDF for document Q&A.'}
+              </Typography>
             </Box>
-          ))}
+          )}
+          <Box sx={{ flex: 1, maxWidth: 760, width: '100%', mx: 'auto', px: 4, py: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {currentMessages.map((message, index) => (
+              <Box key={index} sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start', flexDirection: message.role === 'user' ? 'row-reverse' : 'row' }}>
+                {/* Avatar */}
+                <Box sx={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700,
+                  background: message.role === 'user' ? 'rgba(59,130,246,0.2)' : 'rgba(99,179,140,0.18)',
+                  color: message.role === 'user' ? '#93c5fd' : '#63b38c',
+                  border: message.role === 'user' ? '1px solid rgba(59,130,246,0.35)' : '1px solid rgba(99,179,140,0.3)' }}>
+                  {message.role === 'user' ? 'Y' : 'S'}
+                </Box>
+                <Box sx={{ flex: 1, maxWidth: message.role === 'user' ? '75%' : '100%' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75,
+                    justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <Typography sx={{ color: message.role === 'user' ? '#93c5fd' : '#63b38c', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                      {message.role === 'user' ? 'You' : 'Sixi'}
+                    </Typography>
+                    {message.role === 'assistant' && (
+                      <IconButton size="small" onClick={() => playTTS(message.content)} sx={{ color: '#555', p: 0.25, '&:hover': { color: '#999', background: 'transparent' } }}>
+                        <VolumeUpIcon sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    )}
+                  </Box>
+                  <Box dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+                    sx={{
+                      color: message.role === 'user' ? '#e8e8e8' : '#d4d4d4',
+                      fontSize: '0.95rem', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      background: message.role === 'user' ? 'rgba(59,130,246,0.15)' : 'rgba(99,179,140,0.05)',
+                      border: message.role === 'user' ? '1px solid rgba(59,130,246,0.25)' : '1px solid rgba(99,179,140,0.12)',
+                      borderRadius: message.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                      px: 2.5, py: 1.75
+                    }} />
+                </Box>
+              </Box>
+            ))}
+            {loading && (
+              <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+                <Box sx={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700,
+                  background: 'rgba(99,179,140,0.18)', color: '#63b38c', border: '1px solid rgba(99,179,140,0.3)' }}>S</Box>
+                <Box sx={{ pt: 0.5 }}>
+                  <Typography sx={{ color: '#63b38c', fontSize: '0.78rem', fontWeight: 700, mb: 1.5 }}>Sixi</Typography>
+                  <Box sx={{ display: 'flex', gap: 0.75 }}>
+                    {[0, 1, 2].map(i => (
+                      <Box key={i} sx={{ width: 6, height: 6, borderRadius: '50%', background: '#666',
+                        animation: 'bounce 1.2s infinite', animationDelay: `${i * 0.2}s`,
+                        '@keyframes bounce': { '0%, 80%, 100%': { transform: 'translateY(0)', opacity: 0.3 }, '40%': { transform: 'translateY(-6px)', opacity: 1 } }
+                      }} />
+                    ))}
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </Box>
         </Box>
 
         {/* Input */}
-        <Box sx={{ p: 3, background: 'rgba(255, 255, 255, 0.96)', borderTop: '1px solid rgba(0, 0, 0, 0.06)' }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-            <TextField
-              fullWidth
-              multiline
-              rows={1}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  sendMessage()
-                }
-              }}
-              placeholder="Enter your question..."
-              disabled={loading}
-              inputRef={messageInputRef}
-            />
-            <Button
-              variant="contained"
-              onClick={sendMessage}
-              disabled={!inputMessage.trim() || loading}
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #653a91 100%)' }
-              }}
-            >
-              {loading ? 'Sending...' : 'Send'}
-            </Button>
+        <Box sx={{ px: 4, pt: 2.5, pb: 3, borderTop: '1px solid rgba(255,255,255,0.06)', background: '#080808' }}>
+          <Box sx={{ maxWidth: 760, mx: 'auto' }}>
+            {/* Toolbar row */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+              <FormControl size="small" sx={{ minWidth: 130,
+                '& .MuiOutlinedInput-root': { color: '#aaa', borderRadius: '8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.04)',
+                  '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
+                  '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+                  '&.Mui-focused fieldset': { borderColor: 'rgba(255,255,255,0.4)' } },
+                '& .MuiInputLabel-root': { color: '#777', fontSize: '0.8rem' },
+                '& .MuiSelect-icon': { color: '#777' } }}>
+                <InputLabel>Model</InputLabel>
+                <Select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} label="Model"
+                  MenuProps={{ PaperProps: { sx: { background: '#111', border: '1px solid rgba(255,255,255,0.1)', color: '#e0e0e0', borderRadius: '10px' } } }}>
+                  <MenuItem value="2" sx={{ fontSize: '0.875rem', '&:hover': { background: 'rgba(255,255,255,0.05)' } }}>Ollama (Local)</MenuItem>
+                  <MenuItem value="3" sx={{ fontSize: '0.875rem', '&:hover': { background: 'rgba(255,255,255,0.05)' } }}>Claude</MenuItem>
+                </Select>
+              </FormControl>
+              <IconButton onClick={() => setPdfLibraryOpen(true)} size="small"
+                sx={{ color: '#777', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', p: 0.75,
+                  '&:hover': { color: '#ccc', border: '1px solid rgba(255,255,255,0.3)', background: 'transparent' } }}>
+                <FolderIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+              {attachedDoc && (
+                <Chip label={`📄 ${attachedDoc.filename}`} size="small" onDelete={() => setPdfLibraryOpen(true)}
+                  sx={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.06)', color: '#aaa', border: '1px solid rgba(255,255,255,0.12)',
+                    '& .MuiChip-deleteIcon': { color: '#666', '&:hover': { color: '#fff' } } }} />
+              )}
+            </Box>
+            {/* Text + Send row */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+              <TextField fullWidth multiline rows={1} value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                placeholder="Message Sixi..."
+                disabled={loading}
+                inputRef={messageInputRef}
+                sx={{ '& .MuiOutlinedInput-root': { color: '#e0e0e0', borderRadius: '14px', background: '#0d0d0d',
+                    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
+                    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                    '&.Mui-focused fieldset': { borderColor: 'rgba(255,255,255,0.4)' } },
+                  '& .MuiInputBase-input::placeholder': { color: '#666' }
+                }}
+              />
+              <Button variant="contained" onClick={sendMessage} disabled={!inputMessage.trim() || loading}
+                sx={{ px: 3.5, py: 1.6, background: '#fff', color: '#000', borderRadius: '50px', textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap', boxShadow: 'none',
+                  '&:hover': { background: '#e8e8e8', boxShadow: 'none' }, '&:disabled': { background: '#111', color: '#333', boxShadow: 'none' } }}>
+                {loading ? '...' : 'Send'}
+              </Button>
+            </Box>
           </Box>
         </Box>
       </Box>

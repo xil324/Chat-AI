@@ -5,3 +5,4 @@ node_modules/
 CLAUDE.md
 .claude/
 elasticsearch*.tar.gz
+elasticsearch-*/

@@ -7,14 +7,14 @@ import { AIHelper } from "./AIHelper.js";
  */
 class AIHelperManager {
 	constructor() {
-		this.helpers = new Map(); // Map<userName, Map<sessionId, AIHelper>>
+		this.aiHelpers = new Map(); // Map<userName, Map<sessionId, AIHelper>>
 	}
 
 	getOrCreate(userName, sessionId, modelType) {
-		if (!this.helpers.has(userName)) {
-			this.helpers.set(userName, new Map());
+		if (!this.aiHelpers.has(userName)) {
+			this.aiHelpers.set(userName, new Map());
 		}
-		const userHelpers = this.helpers.get(userName);
+		const userHelpers = this.aiHelpers.get(userName);
 
 		const existing = userHelpers.get(sessionId);
 		if (existing && existing.modelType === modelType) {
@@ -30,11 +30,11 @@ class AIHelperManager {
 	}
 
 	get(userName, sessionId) {
-		return this.helpers.get(userName)?.get(sessionId) || null;
+		return this.aiHelpers.get(userName)?.get(sessionId) || null;
 	}
 
 	getSessions(userName) {
-		const userHelpers = this.helpers.get(userName);
+		const userHelpers = this.aiHelpers.get(userName);
 		if (!userHelpers) return [];
 		return Array.from(userHelpers.keys());
 	}

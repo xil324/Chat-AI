@@ -8,9 +8,7 @@ let embedder = null;
  */
 async function getEmbedder() {
 	if (!embedder) {
-		console.log("Loading embedding model (first run may take a moment)...");
 		embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-		console.log("Embedding model loaded");
 	}
 	return embedder;
 }
@@ -38,6 +36,5 @@ export async function embedBatch(texts) {
 		const output = await model(text, { pooling: "mean", normalize: true });
 		results.push(Array.from(output.data));
 	}
-	console.log("finish embedding all the texts");
 	return results;
 }

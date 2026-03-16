@@ -6,14 +6,17 @@ export class OllamaModel {
     this.modelName = config.ollama.modelName;
   }
 
-  async generateResponse(history) {
+  async generateResponse(history, systemPrompt = null) {
     // history: [{ role: 'user'|'assistant', content: string }]
+    const messages = systemPrompt
+      ? [{ role: 'system', content: systemPrompt }, ...history]
+      : history;
     const response = await fetch(`${this.baseURL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: this.modelName,
-        messages: history,
+        messages,
         stream: false,
       }),
     });

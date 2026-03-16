@@ -7,13 +7,17 @@ export class ClaudeModel {
     this.model = config.claude.model;
   }
 
-  async generateResponse(history) {
+  async generateResponse(history, systemPrompt = null) {
     // history: [{ role: 'user'|'assistant', content: string }]
-    const response = await this.client.messages.create({
+    const params = {
       model: this.model,
       max_tokens: 8096,
       messages: history,
-    });
+    };
+    if (systemPrompt) {
+      params.system = systemPrompt;
+    }
+    const response = await this.client.messages.create(params);
     return response.content[0].text;
   }
 }

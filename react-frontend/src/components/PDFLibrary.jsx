@@ -1,24 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   Drawer, Box, Typography, Button, IconButton, List, ListItem,
-  ListItemText, Divider, CircularProgress, Alert
+  ListItemText, Divider, CircularProgress
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
-import AttachFileIcon from '@mui/icons-material/AttachFile'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import api from '../utils/api'
 
-/**
- * PDFLibrary drawer — list, upload, and attach/detach PDFs.
- *
- * Props:
- *   open          boolean       drawer visibility
- *   onClose       () => void
- *   sessionId     string|null   current session id
- *   attachedDocId string|null   currently attached document id
- *   onAttach      (doc) => void called when user attaches a doc { id, filename }
- *   onDetach      () => void    called when user detaches
- */
 export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, onAttach, onDetach }) {
   const [documents, setDocuments] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -42,10 +30,8 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
     const file = e.target.files[0]
     if (!file) return
     e.target.value = ''
-
     const formData = new FormData()
     formData.append('file', file)
-
     setUploading(true)
     setError('')
     try {
@@ -69,10 +55,7 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
   }
 
   const handleAttach = async (doc) => {
-    if (!sessionId) {
-      setError('Start or select a session first')
-      return
-    }
+    if (!sessionId) { setError('Start or select a session first'); return }
     try {
       await api.post('/document/attach', { sessionId, documentId: doc.id })
       onAttach(doc)
@@ -92,86 +75,107 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
   }
 
   return (
-    <Drawer anchor="right" open={open} onClose={onClose}>
-      <Box sx={{ width: 340, p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>PDF Library</Typography>
+    <Drawer anchor="right" open={open} onClose={onClose}
+      PaperProps={{ sx: { background: '#0d0d0d', borderLeft: '1px solid rgba(255,255,255,0.08)', width: 340 } }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 3 }}>
 
-        {error && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>{error}</Alert>}
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.3px' }}>
+            PDF Library
+          </Typography>
+          <IconButton onClick={onClose} size="small" sx={{ color: '#555', '&:hover': { color: '#fff', background: 'transparent' } }}>
+            ✕
+          </IconButton>
+        </Box>
 
+        {/* Upload button */}
         <Button
-          variant="contained"
-          startIcon={uploading ? <CircularProgress size={16} color="inherit" /> : <AttachFileIcon />}
+          variant="outlined"
           disabled={uploading}
           onClick={() => fileInputRef.current?.click()}
-          sx={{ mb: 2 }}
-        >
-          {uploading ? 'Processing PDF…' : 'Upload PDF'}
+          sx={{ mb: 2.5, borderColor: 'rgba(255,255,255,0.15)', color: '#aaa', borderRadius: '10px',
+            textTransform: 'none', fontWeight: 600, py: 1.2,
+            '&:hover': { borderColor: 'rgba(255,255,255,0.35)', color: '#fff', background: 'transparent' },
+            '&:disabled': { borderColor: 'rgba(255,255,255,0.06)', color: '#444' } }}>
+          {uploading
+            ? <><CircularProgress size={14} sx={{ color: '#555', mr: 1 }} />Processing…</>
+            : '+ Upload PDF'}
         </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
+        <input ref={fileInputRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handleFileChange} />
 
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+        {error && (
+          <Box sx={{ mb: 2, px: 2, py: 1.2, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            borderRadius: '8px', color: '#f87171', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {error}
+            <IconButton size="small" onClick={() => setError('')} sx={{ color: '#f87171', p: 0.25, '&:hover': { background: 'transparent' } }}>✕</IconButton>
+          </Box>
+        )}
+
+        {/* Count label */}
+        <Typography sx={{ color: '#555', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', mb: 1.5 }}>
           {documents.length} document{documents.length !== 1 ? 's' : ''}
         </Typography>
 
+        {/* Document list */}
         <Box sx={{ flex: 1, overflowY: 'auto' }}>
-          <List dense>
-            {documents.map((doc) => {
-              const isAttached = doc.id === attachedDocId
-              return (
-                <React.Fragment key={doc.id}>
-                  <ListItem
-                    sx={{
-                      borderRadius: 1,
-                      background: isAttached ? 'rgba(102,126,234,0.1)' : 'transparent',
-                    }}
-                    secondaryAction={
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+          {documents.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <Typography sx={{ color: '#444', fontSize: '0.875rem' }}>No PDFs yet.</Typography>
+              <Typography sx={{ color: '#333', fontSize: '0.8rem', mt: 0.5 }}>Upload one above.</Typography>
+            </Box>
+          ) : (
+            <List dense disablePadding>
+              {documents.map((doc) => {
+                const isAttached = doc.id === attachedDocId
+                return (
+                  <React.Fragment key={doc.id}>
+                    <ListItem disablePadding sx={{
+                      borderRadius: '10px', mb: 0.5, px: 1.5, py: 1,
+                      background: isAttached ? 'rgba(99,179,140,0.08)' : 'rgba(255,255,255,0.03)',
+                      border: isAttached ? '1px solid rgba(99,179,140,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                    }}>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
+                            {isAttached && <CheckCircleIcon sx={{ fontSize: 14, color: '#63b38c' }} />}
+                            <Typography sx={{ color: isAttached ? '#9ee3c2' : '#ccc', fontSize: '0.83rem', fontWeight: 500, wordBreak: 'break-all', lineHeight: 1.4 }}>
+                              {doc.filename}
+                            </Typography>
+                          </Box>
+                        }
+                        secondary={
+                          <Typography sx={{ color: '#555', fontSize: '0.72rem' }}>
+                            {new Date(doc.created_at).toLocaleDateString()}
+                          </Typography>
+                        }
+                      />
+                      <Box sx={{ display: 'flex', gap: 0.5, ml: 1, flexShrink: 0 }}>
                         {isAttached ? (
-                          <Button size="small" onClick={handleDetach} color="warning">
+                          <Button size="small" onClick={handleDetach}
+                            sx={{ color: '#f87171', textTransform: 'none', fontSize: '0.75rem', px: 1, py: 0.3, minWidth: 0,
+                              '&:hover': { background: 'rgba(248,113,113,0.08)' } }}>
                             Detach
                           </Button>
                         ) : (
-                          <Button
-                            size="small"
-                            onClick={() => handleAttach(doc)}
-                            disabled={!sessionId}
-                            title={!sessionId ? 'Select a session first' : ''}
-                          >
+                          <Button size="small" onClick={() => handleAttach(doc)} disabled={!sessionId}
+                            sx={{ color: '#63b38c', textTransform: 'none', fontSize: '0.75rem', px: 1, py: 0.3, minWidth: 0,
+                              '&:hover': { background: 'rgba(99,179,140,0.08)' },
+                              '&:disabled': { color: '#333' } }}>
                             Attach
                           </Button>
                         )}
-                        <IconButton size="small" onClick={() => handleDelete(doc.id)}>
-                          <DeleteIcon fontSize="small" />
+                        <IconButton size="small" onClick={() => handleDelete(doc.id)}
+                          sx={{ color: '#444', p: 0.5, '&:hover': { color: '#f87171', background: 'transparent' } }}>
+                          <DeleteIcon sx={{ fontSize: 15 }} />
                         </IconButton>
                       </Box>
-                    }
-                  >
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {isAttached && <CheckCircleIcon sx={{ fontSize: 16, color: '#667eea' }} />}
-                          <span style={{ fontSize: 13, wordBreak: 'break-all' }}>{doc.filename}</span>
-                        </Box>
-                      }
-                      secondary={new Date(doc.created_at).toLocaleDateString()}
-                    />
-                  </ListItem>
-                  <Divider />
-                </React.Fragment>
-              )
-            })}
-            {documents.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                No PDFs yet. Upload one above.
-              </Typography>
-            )}
-          </List>
+                    </ListItem>
+                  </React.Fragment>
+                )
+              })}
+            </List>
+          )}
         </Box>
       </Box>
     </Drawer>
