@@ -1,40 +1,37 @@
-import { pipeline } from "@xenova/transformers";
+import { config } from '../../config/index.js';
 
-let embedder = null;
-
-/**
- * Lazy-load the sentence embedding model.
- * First call downloads the model (~23MB); subsequent calls use cache.
- */
-async function getEmbedder() {
-	if (!embedder) {
-		embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-	}
-	return embedder;
-}
+const BASE_URL = config.embeddingService.url;
 
 /**
  * Generate a 384-dim embedding vector for a single string.
+ * Calls the Python embedding microservice.
  * @param {string} text
- * @returns {number[]}
+ * @returns {Promise<number[]>}
  */
 export async function embed(text) {
-	const model = await getEmbedder();
-	const output = await model(text, { pooling: "mean", normalize: true });
-	return Array.from(output.data);
+  const res = await fetch(`${BASE_URL}/embed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(`Embedding service error: ${res.status}`);
+  const data = await res.json();
+  return data.embedding;
 }
 
 /**
- * Generate embeddings for an array of strings (serial to avoid memory issues).
+ * Generate embeddings for an array of strings in one batch call.
  * @param {string[]} texts
- * @returns {number[][]}
+ * @returns {Promise<number[][]>}
  */
 export async function embedBatch(texts) {
-	const model = await getEmbedder();
-	const results = [];
-	for (const text of texts) {
-		const output = await model(text, { pooling: "mean", normalize: true });
-		results.push(Array.from(output.data));
-	}
-	return results;
+  if (texts.length === 0) return [];
+  const res = await fetch(`${BASE_URL}/embed/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texts }),
+  });
+  if (!res.ok) throw new Error(`Embedding service error: ${res.status}`);
+  const data = await res.json();
+  return data.embeddings;
 }

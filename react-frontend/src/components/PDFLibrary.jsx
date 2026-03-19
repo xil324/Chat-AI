@@ -5,7 +5,7 @@ import {
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import api from '../utils/api'
+import { listDocuments, uploadDocument, deleteDocument, attachDocument, detachDocument } from '../utils/documentApi'
 
 export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, onAttach, onDetach }) {
   const [documents, setDocuments] = useState([])
@@ -15,7 +15,7 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
 
   const loadDocuments = async () => {
     try {
-      const res = await api.get('/document/list')
+      const res = await listDocuments()
       setDocuments(res.data.documents || [])
     } catch {
       setError('Failed to load documents')
@@ -35,7 +35,7 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
     setUploading(true)
     setError('')
     try {
-      await api.post('/document/upload', formData)
+      await uploadDocument(formData)
       await loadDocuments()
     } catch (err) {
       setError(err.response?.data?.error || 'Upload failed')
@@ -46,7 +46,7 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
 
   const handleDelete = async (docId) => {
     try {
-      await api.delete(`/document/${docId}`)
+      await deleteDocument(docId)
       if (attachedDocId === docId) onDetach()
       await loadDocuments()
     } catch {
@@ -57,7 +57,7 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
   const handleAttach = async (doc) => {
     if (!sessionId) { setError('Start or select a session first'); return }
     try {
-      await api.post('/document/attach', { sessionId, documentId: doc.id })
+      await attachDocument(sessionId, doc.id)
       onAttach(doc)
     } catch {
       setError('Failed to attach document')
@@ -67,7 +67,7 @@ export default function PDFLibrary({ open, onClose, sessionId, attachedDocId, on
   const handleDetach = async () => {
     if (!sessionId) return
     try {
-      await api.post('/document/detach', { sessionId })
+      await detachDocument(sessionId)
       onDetach()
     } catch {
       setError('Failed to detach document')

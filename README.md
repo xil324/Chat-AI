@@ -10,15 +10,17 @@
 
 ## Tech Stack
 
-| Component | Technology |
-| :--- | :--- |
-| **Frontend** | React 18 + Vite + MUI |
-| **Backend** | Node.js + Express |
-| **Database** | MongoDB |
-| **Cache** | Redis |
-| **AI / LLM** | Claude (Anthropic) / Ollama |
-| **RAG** | Elasticsearch 8 (hybrid BM25 + kNN + RRF) |
-| **Embeddings** | `all-MiniLM-L6-v2` via `@xenova/transformers` |
+| Component      | Technology                                    |
+| :------------- | :-------------------------------------------- |
+| **Frontend**   | React 18 + Vite + MUI                         |
+| **Backend**    | Node.js + Express                             |
+| **Database**   | MongoDB                                       |
+| **Cache**      | Redis                                         |
+| **AI / LLM**   | Claude (Anthropic) / Ollama                   |
+| **RAG**        | Elasticsearch 8 (hybrid BM25 + kNN + RRF)     |
+| **Embeddings** | `paraphrase-multilingual-MiniLM-L12-v2` (Python microservice) or `all-MiniLM-L6-v2` via `@xenova/transformers` (in-process fallback) |
+| **Reranker**   | `cross-encoder/ms-marco-MiniLM-L-6-v2` (Python microservice) |
+| **i18n**       | React i18n with language toggle (EN/ZH) |
 
 ---
 
@@ -28,6 +30,7 @@
 - **AI Chat** — Multi-session conversations with Claude or local Ollama models; history persists in MongoDB
 - **Document Q&A (RAG)** — Upload PDFs, attach them to a chat session, and ask questions with relevant context retrieved via hybrid search
 - **Dark UI** — Minimal black-themed interface with differentiated user (blue) and AI (green) message bubbles
+- **Multilingual UI** — Language toggle supporting English and Chinese (i18n)
 
 ---
 
@@ -47,6 +50,10 @@ Services → DAOs → MongoDB
          → AIHelperManager (in-memory session history)
             → ClaudeModel (@anthropic-ai/sdk)
             → OllamaModel (HTTP)
+
+Python Microservices (optional, in services/)
+  Embedding Service (port 8001) — multilingual sentence embeddings
+  Reranker Service  (port 8002) — cross-encoder reranking
 ```
 
 The `AIHelperManager` holds per-user, per-session conversation history in memory. On startup it is hydrated from MongoDB so history survives restarts.
@@ -54,6 +61,7 @@ The `AIHelperManager` holds per-user, per-session conversation history in memory
 ### AI Factory Pattern
 
 `node-backend/src/utils/aihelper/` implements a factory for multiple LLM backends:
+
 - Model type `"2"` → Ollama
 - Model type `"3"` → Claude (default: `claude-haiku-4-5-20251001`)
 
@@ -64,7 +72,8 @@ To add a new provider: implement a class with `generateResponse(history)`, regis
 1. **Upload** — PDF is parsed, split into overlapping chunks, embedded with `all-MiniLM-L6-v2`, and bulk-indexed into Elasticsearch
 2. **Attach** — User attaches a document to a chat session (stored in MongoDB session record)
 3. **Retrieve** — On each message, `ragService.retrieveContext()` runs hybrid BM25 + kNN search and fuses results with RRF
-4. **Augment** — Top-K chunks are injected as a system prompt into the LLM call
+4. **Rerank** — Top candidates are reranked by the cross-encoder reranker service for more precise relevance scoring
+5. **Augment** — Top-K chunks are injected as a system prompt into the LLM call
 
 Elasticsearch is optional — if unavailable at startup, RAG is silently disabled and chat works without document context.
 
@@ -78,6 +87,7 @@ Elasticsearch is optional — if unavailable at startup, RAG is silently disable
 - MongoDB, Redis running locally
 - Claude API key (from [console.anthropic.com](https://console.anthropic.com))
 - Elasticsearch 8 (optional, for document Q&A)
+- Python 3.9+ with `sentence-transformers` (optional, for embedding/reranker microservices)
 
 ### Install services (macOS)
 
@@ -99,6 +109,7 @@ cd elasticsearch-8.x.x
 ```
 
 > **Note:** Elasticsearch requires free disk space. If your disk is above 90% full, shard allocation will be blocked. Either free up space or temporarily disable the threshold:
+>
 > ```bash
 > curl -X PUT "http://localhost:9200/_cluster/settings" \
 >   -H "Content-Type: application/json" \
@@ -151,25 +162,28 @@ EMAIL_APP_PASSWORD=your-app-password
 All routes prefixed `/api/v1/`. Frontend proxies `/api/*` → `/api/v1/*`.
 
 ### User (no auth)
-| Method | Path | Description |
-|---|---|---|
-| POST | `/user/login` | Returns `{ token }` |
-| POST | `/user/register` | Email + captcha + password → `{ token }` |
-| POST | `/user/captcha` | Sends 6-digit code to email (2min TTL) |
+
+| Method | Path             | Description                              |
+| ------ | ---------------- | ---------------------------------------- |
+| POST   | `/user/login`    | Returns `{ token }`                      |
+| POST   | `/user/register` | Email + captcha + password → `{ token }` |
+| POST   | `/user/captcha`  | Sends 6-digit code to email (2min TTL)   |
 
 ### Chat (JWT required)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/chat/sessions` | List user's sessions |
-| POST | `/chat/send-new-session` | New session → `{ sessionId, message }` |
-| POST | `/chat/send` | Continue session → `{ message }` |
-| POST | `/chat/history` | Session message history |
+
+| Method | Path                     | Description                            |
+| ------ | ------------------------ | -------------------------------------- |
+| GET    | `/chat/sessions`         | List user's sessions                   |
+| POST   | `/chat/send-new-session` | New session → `{ sessionId, message }` |
+| POST   | `/chat/send`             | Continue session → `{ message }`       |
+| POST   | `/chat/history`          | Session message history                |
 
 ### Document (JWT required)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/document/list` | List uploaded documents |
-| POST | `/document/upload` | Upload PDF → `{ id, filename }` |
-| DELETE | `/document/:id` | Delete document + ES chunks |
-| POST | `/document/attach` | Attach document to session |
-| POST | `/document/detach` | Detach document from session |
+
+| Method | Path               | Description                     |
+| ------ | ------------------ | ------------------------------- |
+| GET    | `/document/list`   | List uploaded documents         |
+| POST   | `/document/upload` | Upload PDF → `{ id, filename }` |
+| DELETE | `/document/:id`    | Delete document + ES chunks     |
+| POST   | `/document/attach` | Attach document to session      |
+| POST   | `/document/detach` | Detach document from session    |
