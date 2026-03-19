@@ -1,10 +1,18 @@
-# Chat-AI Platform (Node.js + React)
+# Multilingual Healthcare Regulatory Assistant
 
 ## Overview
 
-**Chat-AI** (Sixi AI) is a full-stack AI chat platform with user authentication, multi-session conversations, document Q&A via RAG, and support for both cloud (Claude) and local (Ollama) LLMs.
+A RAG-powered platform for navigating U.S. healthcare policy, insurance regulations, and benefits documentation. Users can ask questions in Chinese or English and receive answers grounded in official regulatory documents — Medicare, Medicaid, CHIP, ACA marketplace guides, and Texas Department of Insurance resources.
 
 **Repository:** [https://github.com/xil324/Chat-AI](https://github.com/xil324/Chat-AI)
+
+---
+
+## Key Engineering Decisions
+
+- **Cross-lingual search** — Chinese queries are translated to English before BM25 retrieval, while the original Chinese query drives semantic (kNN) search. Both results are fused via weighted RRF, so a user asking "我的孩子能申请CHIP吗" correctly retrieves English regulatory documents.
+- **Two-stage retrieval** — Hybrid BM25 + kNN fusion (weighted RRF) followed by cross-encoder reranking. BM25 captures exact regulatory terms and form numbers; kNN captures paraphrased questions; the reranker scores query-passage pairs jointly for final precision.
+- **LLM Factory pattern** — Swappable LLM backends (Claude / Ollama) via a factory, so the system is not locked to a single provider.
 
 ---
 
@@ -16,21 +24,22 @@
 | **Backend**    | Node.js + Express                             |
 | **Database**   | MongoDB                                       |
 | **Cache**      | Redis                                         |
-| **AI / LLM**   | Claude (Anthropic) / Ollama                   |
+| **AI / LLM**   | Claude (Anthropic) / Ollama (swappable via factory) |
 | **RAG**        | Elasticsearch 8 (hybrid BM25 + kNN + RRF)     |
-| **Embeddings** | `paraphrase-multilingual-MiniLM-L12-v2` (Python microservice) or `all-MiniLM-L6-v2` via `@xenova/transformers` (in-process fallback) |
+| **Embeddings** | `paraphrase-multilingual-MiniLM-L12-v2` (Python microservice) |
 | **Reranker**   | `cross-encoder/ms-marco-MiniLM-L-6-v2` (Python microservice) |
-| **i18n**       | React i18n with language toggle (EN/ZH) |
+| **i18n**       | react-i18next — bilingual UI (Chinese / English) |
 
 ---
 
 ## Features
 
-- **User Authentication** — Registration with email verification (captcha via Redis), JWT-based login
-- **AI Chat** — Multi-session conversations with Claude or local Ollama models; history persists in MongoDB
-- **Document Q&A (RAG)** — Upload PDFs, attach them to a chat session, and ask questions with relevant context retrieved via hybrid search
-- **Dark UI** — Minimal black-themed interface with differentiated user (blue) and AI (green) message bubbles
-- **Multilingual UI** — Language toggle supporting English and Chinese (i18n)
+- **Multilingual Q&A** — Ask in Chinese or English; cross-lingual retrieval finds relevant content across language boundaries
+- **Document RAG** — Upload PDFs (insurance policies, denial letters, regulatory guides), attach to a session, retrieve relevant context via hybrid search
+- **Two-stage retrieval** — Hybrid BM25 + kNN fusion (weighted RRF) → cross-encoder reranking → top-5 context chunks
+- **Bilingual UI** — Full Chinese/English interface with persistent language toggle
+- **User Authentication** — Email verification (captcha via Redis TTL), JWT-based sessions
+- **Multi-session conversations** — History persists in MongoDB; hydrated into memory on startup
 
 ---
 
@@ -51,12 +60,23 @@ Services → DAOs → MongoDB
             → ClaudeModel (@anthropic-ai/sdk)
             → OllamaModel (HTTP)
 
-Python Microservices (optional, in services/)
+Python Microservices (services/)
   Embedding Service (port 8001) — multilingual sentence embeddings
   Reranker Service  (port 8002) — cross-encoder reranking
 ```
 
-The `AIHelperManager` holds per-user, per-session conversation history in memory. On startup it is hydrated from MongoDB so history survives restarts.
+### RAG Pipeline
+
+1. **Upload** — PDF parsed → overlapping chunks → language detection per chunk → embedded via Python service → bulk-indexed into Elasticsearch with metadata (title, source, category, language)
+2. **Attach** — User attaches a document to a chat session
+3. **Retrieve** — On each message:
+   - Detect query language
+   - If Chinese: translate to English for cross-lingual BM25 coverage
+   - Run BM25 + kNN in parallel; fuse with weighted RRF (semantic: 0.6, fulltext: 0.4)
+4. **Rerank** — Top-20 candidates passed to cross-encoder reranker → top-5 returned
+5. **Augment** — Top-5 chunks injected as system prompt context into the LLM call
+
+Elasticsearch is optional — if unavailable at startup, RAG is silently disabled and chat continues without document context.
 
 ### AI Factory Pattern
 
@@ -65,17 +85,7 @@ The `AIHelperManager` holds per-user, per-session conversation history in memory
 - Model type `"2"` → Ollama
 - Model type `"3"` → Claude (default: `claude-haiku-4-5-20251001`)
 
-To add a new provider: implement a class with `generateResponse(history)`, register it in [AIModelFactory.js](node-backend/src/utils/aihelper/AIModelFactory.js).
-
-### RAG Pipeline
-
-1. **Upload** — PDF is parsed, split into overlapping chunks, embedded with `all-MiniLM-L6-v2`, and bulk-indexed into Elasticsearch
-2. **Attach** — User attaches a document to a chat session (stored in MongoDB session record)
-3. **Retrieve** — On each message, `ragService.retrieveContext()` runs hybrid BM25 + kNN search and fuses results with RRF
-4. **Rerank** — Top candidates are reranked by the cross-encoder reranker service for more precise relevance scoring
-5. **Augment** — Top-K chunks are injected as a system prompt into the LLM call
-
-Elasticsearch is optional — if unavailable at startup, RAG is silently disabled and chat works without document context.
+To add a new provider: implement a class with `generateResponse(history, systemPrompt)`, register it in `AIModelFactory.js`.
 
 ---
 
@@ -86,47 +96,55 @@ Elasticsearch is optional — if unavailable at startup, RAG is silently disable
 - Node.js ≥ 18
 - MongoDB, Redis running locally
 - Claude API key (from [console.anthropic.com](https://console.anthropic.com))
-- Elasticsearch 8 (optional, for document Q&A)
-- Python 3.9+ with `sentence-transformers` (optional, for embedding/reranker microservices)
+- Elasticsearch 8 (for document Q&A)
+- Python 3.9+ with `sentence-transformers` (for embedding/reranker microservices)
 
 ### Install services (macOS)
 
 ```bash
-brew install mongodb-community@4.4 redis
-brew services start mongodb-community@4.4
+brew install mongodb-community redis
+brew services start mongodb-community
 brew services start redis
 ```
 
-### Elasticsearch (optional)
-
-Download Elasticsearch 8 and start it locally:
+### Python Microservices
 
 ```bash
-# Download from https://www.elastic.co/downloads/elasticsearch
+# Embedding service (port 8001)
+cd services/embedding-service
+pip install -r requirements.txt
+python main.py
+
+# Reranker service (port 8002)
+cd services/reranker-service
+pip install -r requirements.txt
+python main.py
+```
+
+### Elasticsearch
+
+```bash
 tar -xzf elasticsearch-8.x.x-darwin-aarch64.tar.gz
-cd elasticsearch-8.x.x
+# Disable security for local dev in config/elasticsearch.yml:
+#   xpack.security.enabled: false
 ./bin/elasticsearch
 ```
 
-> **Note:** Elasticsearch requires free disk space. If your disk is above 90% full, shard allocation will be blocked. Either free up space or temporarily disable the threshold:
->
+> **Note:** ES blocks shard allocation when disk usage exceeds 90%. Temporarily disable the threshold if needed:
 > ```bash
-> curl -X PUT "http://localhost:9200/_cluster/settings" \
->   -H "Content-Type: application/json" \
->   -d '{"transient":{"cluster.routing.allocation.disk.threshold_enabled":false}}'
+> curl -X PUT "http://localhost:9200/_cluster/settings" -H "Content-Type: application/json" -d @es-settings.json
 > ```
 
-### Backend Setup
+### Backend
 
 ```bash
 cd node-backend
 npm install
-cp .env.example .env
-# Edit .env and add your CLAUDE_API_KEY
+cp .env.example .env   # add CLAUDE_API_KEY
 node index.js
 ```
 
-### Frontend Setup
+### Frontend
 
 ```bash
 cd react-frontend
@@ -134,12 +152,19 @@ npm install
 npm run dev   # http://localhost:8080
 ```
 
+### Seed Sample Documents
+
+```bash
+cd node-backend
+node scripts/seedDocs.js <your-username>
+```
+
+Inserts 4 sample Texas healthcare documents (CHIP, Medicaid, TDI complaints, ACA tax credits) directly into MongoDB + Elasticsearch for testing without needing real PDF uploads.
+
 ### Environment Variables
 
-See [node-backend/.env.example](node-backend/.env.example) for all options.
-
 ```env
-# Required for Claude chat
+# Required
 CLAUDE_API_KEY=your-claude-api-key
 CLAUDE_MODEL=claude-haiku-4-5-20251001
 
@@ -147,10 +172,14 @@ CLAUDE_MODEL=claude-haiku-4-5-20251001
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL_NAME=llama3
 
-# Optional: Elasticsearch RAG
+# Optional: Elasticsearch
 ELASTICSEARCH_URL=http://localhost:9200
 
-# Optional: email (captcha logs to console if not set)
+# Optional: Python microservices
+EMBEDDING_SERVICE_URL=http://localhost:8001
+RERANKER_SERVICE_URL=http://localhost:8002
+
+# Optional: email captcha
 EMAIL_ADDRESS=your@email.com
 EMAIL_APP_PASSWORD=your-app-password
 ```
@@ -187,3 +216,12 @@ All routes prefixed `/api/v1/`. Frontend proxies `/api/*` → `/api/v1/*`.
 | DELETE | `/document/:id`    | Delete document + ES chunks     |
 | POST   | `/document/attach` | Attach document to session      |
 | POST   | `/document/detach` | Detach document from session    |
+
+---
+
+## Roadmap
+
+- [ ] Citation/source attribution — surface which document chunks grounded each answer
+- [ ] Multi-tenant isolation — separate knowledge bases per organization with role-based access
+- [ ] Query rewriting — rewrite follow-up questions into standalone queries using conversation history
+- [ ] Evaluation framework — Recall@K, MRR metrics against a labeled healthcare Q&A dataset
