@@ -18,17 +18,17 @@ A RAG-powered platform for navigating U.S. healthcare policy, insurance regulati
 
 ## Tech Stack
 
-| Component      | Technology                                    |
-| :------------- | :-------------------------------------------- |
-| **Frontend**   | React 18 + Vite + MUI                         |
-| **Backend**    | Node.js + Express                             |
-| **Database**   | MongoDB                                       |
-| **Cache**      | Redis                                         |
-| **AI / LLM**   | Claude (Anthropic) / Ollama (swappable via factory) |
-| **RAG**        | Elasticsearch 8 (hybrid BM25 + kNN + RRF)     |
+| Component      | Technology                                                    |
+| :------------- | :------------------------------------------------------------ |
+| **Frontend**   | React 18 + Vite + MUI                                         |
+| **Backend**    | Node.js + Express                                             |
+| **Database**   | MongoDB                                                       |
+| **Cache**      | Redis                                                         |
+| **AI / LLM**   | Claude (Anthropic) / Ollama (swappable via factory)           |
+| **RAG**        | Elasticsearch 8 (hybrid BM25 + kNN + RRF)                     |
 | **Embeddings** | `paraphrase-multilingual-MiniLM-L12-v2` (Python microservice) |
-| **Reranker**   | `cross-encoder/ms-marco-MiniLM-L-6-v2` (Python microservice) |
-| **i18n**       | react-i18next — bilingual UI (Chinese / English) |
+| **Reranker**   | `cross-encoder/ms-marco-MiniLM-L-6-v2` (Python microservice)  |
+| **i18n**       | react-i18next — bilingual UI (Chinese / English)              |
 
 ---
 
@@ -131,6 +131,7 @@ tar -xzf elasticsearch-8.x.x-darwin-aarch64.tar.gz
 ```
 
 > **Note:** ES blocks shard allocation when disk usage exceeds 90%. Temporarily disable the threshold if needed:
+>
 > ```bash
 > curl -X PUT "http://localhost:9200/_cluster/settings" -H "Content-Type: application/json" -d @es-settings.json
 > ```

@@ -26,17 +26,19 @@ async function translateToEnglish(text) {
 }
 
 /**
- * Retrieve relevant chunks for a query using hybrid BM25 + kNN + RRF + reranking.
- * @param {string} query      - User's question (any language)
- * @param {string} documentId - UUID of attached Document
- * @returns {string}          - Concatenated top-K reranked chunks as context string
+ * Retrieve relevant chunks with metadata for citation.
+ * Returns structured objects: { chunkId, content, title, source, url }
+ *
+ * Key implementation notes:
+ * - _source includes title, source, chunk_index (top-level ES fields, not nested)
+ * - idToMeta runs in parallel with idToContent to survive the reranker's text-only interface
+ * - filteredIds keeps candidates and candidateMeta in sync (never filter independently)
+ * - r.index from reranker is a position in filteredIds/candidates, NOT in topIds
  */
-export async function retrieveContext(query, documentId) {
-  if (!esAvailable) return '';
+export async function retrieveChunks(query, documentId) {
+  if (!esAvailable) return [];
 
   const queryLang = detectLanguage(query);
-
-  // For Chinese queries, translate to English for cross-lingual BM25 coverage
   const searchQuery = queryLang === 'zh'
     ? await translateToEnglish(query)
     : query;
@@ -48,17 +50,12 @@ export async function retrieveContext(query, documentId) {
       index: CHUNK_INDEX,
       query: {
         bool: {
-          must: [{
-            multi_match: {
-              query: searchQuery,
-              fields: ['content', 'content_en', 'content_zh'],
-            },
-          }],
+          must: [{ multi_match: { query: searchQuery, fields: ['content', 'content_en', 'content_zh'] } }],
           filter: [{ term: { doc_id: documentId } }],
         },
       },
       size: SEARCH_SIZE,
-      _source: ['content'],
+      _source: ['content', 'title', 'source', 'chunk_index'],
     }),
     es.search({
       index: CHUNK_INDEX,
@@ -70,22 +67,35 @@ export async function retrieveContext(query, documentId) {
         filter: { term: { doc_id: documentId } },
       },
       size: SEARCH_SIZE,
-      _source: ['content'],
+      _source: ['content', 'title', 'source', 'chunk_index'],
     }),
   ]);
 
-  // Weighted RRF fusion
   const fusionScore = {};
   const idToContent = {};
+  const idToMeta    = {};
 
   bm25Response.hits.hits.forEach((hit, idx) => {
     fusionScore[hit._id] = (fusionScore[hit._id] || 0) + WEIGHTS.fulltext / (idx + RRF_K);
     idToContent[hit._id] = hit._source.content;
+    idToMeta[hit._id]    = {
+      title:      hit._source.title       || '',
+      source:     hit._source.source      || '',
+      url:        null, // ES index has no url field yet
+      chunkIndex: hit._source.chunk_index,
+    };
   });
 
   knnResponse.hits.hits.forEach((hit, idx) => {
     fusionScore[hit._id] = (fusionScore[hit._id] || 0) + WEIGHTS.semantic / (idx + RRF_K);
     idToContent[hit._id] = hit._source.content;
+    // Preserve existing meta if already seen via BM25
+    idToMeta[hit._id] = idToMeta[hit._id] || {
+      title:      hit._source.title       || '',
+      source:     hit._source.source      || '',
+      url:        null,
+      chunkIndex: hit._source.chunk_index,
+    };
   });
 
   const topIds = Object.entries(fusionScore)
@@ -93,9 +103,29 @@ export async function retrieveContext(query, documentId) {
     .slice(0, SEARCH_SIZE)
     .map(([id]) => id);
 
-  const candidates = topIds.map(id => idToContent[id]).filter(Boolean);
+  // Filter on idToContent only — keeps candidates and candidateMeta in sync.
+  // Never apply independent .filter(Boolean) on each; that would desync them.
+  const filteredIds   = topIds.filter(id => idToContent[id]);
+  const candidates    = filteredIds.map(id => idToContent[id]);
+  const candidateMeta = filteredIds.map(id => idToMeta[id]);
 
-  // Rerank candidates and return top-K
   const reranked = await rerank(query, candidates, TOP_K);
-  return reranked.map(r => r.passage).join('\n\n---\n\n');
+
+  // r.index is a position in filteredIds/candidates, NOT in topIds
+  return reranked.map(r => ({
+    chunkId: filteredIds[r.index],
+    content: r.passage,
+    title:   candidateMeta[r.index]?.title  || '',
+    source:  candidateMeta[r.index]?.source || '',
+    url:     candidateMeta[r.index]?.url    || null,
+  }));
+}
+
+/**
+ * Retrieve context string for non-agentic use (unchanged interface).
+ */
+export async function retrieveContext(query, documentId) {
+  if (!esAvailable) return '';
+  const chunks = await retrieveChunks(query, documentId);
+  return chunks.map(c => c.content).join('\n\n---\n\n');
 }

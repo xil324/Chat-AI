@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Box, Button, TextField, Select, MenuItem, FormControl,
-  InputLabel, Typography, IconButton, Snackbar, Alert
+  InputLabel, Typography, IconButton, Snackbar, Alert, Popover
 } from '@mui/material'
 import VolumeUpIcon from '@mui/icons-material/VolumeUp'
 import FolderIcon from '@mui/icons-material/Folder'
@@ -11,6 +11,76 @@ import Chip from '@mui/material/Chip'
 import PDFLibrary from '../components/PDFLibrary'
 import LanguageToggle from '../components/LanguageToggle'
 import { getSessions, getChatHistory, sendNewSession, sendMessage as sendChatMessage, getTTS } from '../utils/chatApi'
+
+function MessageContent({ content, citations, sx }) {
+  const [anchor, setAnchor] = useState({ el: null, index: null })
+
+  const renderMarkdownStr = (text) => {
+    if (!text && text !== '') return ''
+    return String(text)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>')
+  }
+
+  const hasCitations = citations && citations.length > 0
+
+  if (!hasCitations) {
+    return <Box dangerouslySetInnerHTML={{ __html: renderMarkdownStr(content) }} sx={sx} />
+  }
+
+  // split(/\[(\d+)\]/g) — capturing group keeps numbers in array
+  // e.g. "text [1] more" → ["text ", "1", " more"]
+  // even indices = text segments, odd indices = citation numbers
+  const parts = content.split(/\[(\d+)\]/g)
+  const activeCitation = anchor.index ? citations.find(c => c.index === anchor.index) : null
+
+  return (
+    <Box sx={sx}>
+      {parts.map((part, i) => {
+        if (i % 2 === 1) {
+          const idx = parseInt(part, 10)
+          const known = citations.some(c => c.index === idx)
+          if (!known) return <React.Fragment key={i}>[{part}]</React.Fragment>
+          return (
+            <sup key={i} onClick={e => setAnchor({ el: e.currentTarget, index: idx })}
+              style={{ cursor: 'pointer', color: '#63b38c', userSelect: 'none', fontWeight: 700 }}>
+              [{part}]
+            </sup>
+          )
+        }
+        return <span key={i} dangerouslySetInnerHTML={{ __html: renderMarkdownStr(part) }} />
+      })}
+
+      <Popover
+        open={Boolean(anchor.el)}
+        anchorEl={anchor.el}
+        onClose={() => setAnchor({ el: null, index: null })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        PaperProps={{ sx: { background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', p: 1.5, maxWidth: 300 } }}
+      >
+        {activeCitation && (
+          <Box>
+            <Typography sx={{ color: '#e0e0e0', fontSize: '0.8rem', fontWeight: 600, mb: 0.5 }}>
+              {activeCitation.title || 'Source'}
+            </Typography>
+            <Typography sx={{ color: '#888', fontSize: '0.75rem' }}>
+              {activeCitation.source}
+            </Typography>
+            {activeCitation.url && (
+              <Typography component="a" href={activeCitation.url} target="_blank" rel="noopener noreferrer"
+                sx={{ color: '#63b38c', fontSize: '0.75rem', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                {activeCitation.url}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </Popover>
+    </Box>
+  )
+}
 
 function AIChat() {
   const { t } = useTranslation()
@@ -92,7 +162,7 @@ function AIChat() {
       try {
         const response = await getChatHistory(sessionId)
         if (response.data && Array.isArray(response.data.history)) {
-          const messages = response.data.history.map(item => ({ role: item.is_user ? 'user' : 'assistant', content: item.content }))
+          const messages = response.data.history.map(item => ({ role: item.is_user ? 'user' : 'assistant', content: item.content, citations: item.citations || [] }))
           setSessions(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], messages } }))
           setCurrentMessages(messages)
         }
@@ -109,7 +179,7 @@ function AIChat() {
     if (tempSession || !currentSessionId || currentSessionId === 'temp') {
       const response = await sendNewSession(question, selectedModel)
       const sessionId = String(response.data.sessionId)
-      const aiMessage = { role: 'assistant', content: response.data.message || '' }
+      const aiMessage = { role: 'assistant', content: response.data.message || '', citations: response.data.citations || [] }
       setSessions(prev => ({ ...prev, [sessionId]: { id: sessionId, name: question.slice(0, 30), messages: [{ role: 'user', content: question }, aiMessage] } }))
       setCurrentSessionId(sessionId)
       setTempSession(false)
@@ -117,7 +187,7 @@ function AIChat() {
     } else {
       const sessionMsgs = [...(sessions[currentSessionId]?.messages || []), { role: 'user', content: question }]
       const response = await sendChatMessage(question, selectedModel, currentSessionId)
-      const aiMessage = { role: 'assistant', content: response.data.message || '' }
+      const aiMessage = { role: 'assistant', content: response.data.message || '', citations: response.data.citations || [] }
       sessionMsgs.push(aiMessage)
       setSessions(prev => ({ ...prev, [currentSessionId]: { ...prev[currentSessionId], messages: sessionMsgs } }))
       setCurrentMessages([...sessionMsgs])
@@ -216,11 +286,14 @@ function AIChat() {
                       </IconButton>
                     )}
                   </Box>
-                  <Box dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+                  <MessageContent
+                    content={message.content}
+                    citations={message.citations || []}
                     sx={{ color: message.role === 'user' ? '#e8e8e8' : '#d4d4d4', fontSize: '0.95rem', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                       background: message.role === 'user' ? 'rgba(59,130,246,0.15)' : 'rgba(99,179,140,0.05)',
                       border: message.role === 'user' ? '1px solid rgba(59,130,246,0.25)' : '1px solid rgba(99,179,140,0.12)',
-                      borderRadius: message.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px', px: 2.5, py: 1.75 }} />
+                      borderRadius: message.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px', px: 2.5, py: 1.75 }}
+                  />
                 </Box>
               </Box>
             ))}

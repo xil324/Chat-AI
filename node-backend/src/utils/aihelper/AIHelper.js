@@ -27,8 +27,6 @@ export class AIHelper {
 			? `You are a multilingual healthcare regulatory assistant for U.S. healthcare policy.\nThe following excerpts are retrieved from the user's uploaded documents. Use them as your primary reference when answering, and supplement with your own knowledge where helpful.\nAlways answer in the SAME LANGUAGE as the user's question. Use plain, accessible language.\n\n[Document Excerpts]\n${systemContext}`
 			: `You are a multilingual healthcare regulatory assistant for U.S. healthcare policy. Answer in the same language as the user's question. Use plain, accessible language.`;
 
-		console.log("systemPrompt", systemPrompt);
-		// Only persist to history after the model call succeeds
 		const reply = await this.model.generateResponse(
 			messagesToSend,
 			systemPrompt,
