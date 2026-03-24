@@ -12,6 +12,7 @@ A RAG-powered platform for navigating U.S. healthcare policy, insurance regulati
 
 - **Cross-lingual search** — Chinese queries are translated to English before BM25 retrieval, while the original Chinese query drives semantic (kNN) search. Both results are fused via weighted RRF, so a user asking "我的孩子能申请CHIP吗" correctly retrieves English regulatory documents.
 - **Two-stage retrieval** — Hybrid BM25 + kNN fusion (weighted RRF) followed by cross-encoder reranking. BM25 captures exact regulatory terms and form numbers; kNN captures paraphrased questions; the reranker scores query-passage pairs jointly for final precision.
+- **Agentic RAG with query rewriting** — Follow-up questions ("what about that regulation?") are rewritten into standalone queries using conversation history before retrieval. If the first retrieval round is insufficient, the LLM proposes a refined query and the pipeline retries (up to 3 rounds), accumulating and deduplicating chunks across rounds before generating a cited answer.
 - **LLM Factory pattern** — Swappable LLM backends (Claude / Ollama) via a factory, so the system is not locked to a single provider.
 
 ---
@@ -36,6 +37,7 @@ A RAG-powered platform for navigating U.S. healthcare policy, insurance regulati
 
 - **Multilingual Q&A** — Ask in Chinese or English; cross-lingual retrieval finds relevant content across language boundaries
 - **Document RAG** — Upload PDFs (insurance policies, denial letters, regulatory guides), attach to a session, retrieve relevant context via hybrid search
+- **Agentic RAG** — When a document is attached, a ReAct-style pipeline iteratively refines the search query (up to 3 rounds) until the LLM deems the retrieved context sufficient, returning a cited answer
 - **Two-stage retrieval** — Hybrid BM25 + kNN fusion (weighted RRF) → cross-encoder reranking → top-5 context chunks
 - **Bilingual UI** — Full Chinese/English interface with persistent language toggle
 - **User Authentication** — Email verification (captcha via Redis TTL), JWT-based sessions
@@ -69,12 +71,14 @@ Python Microservices (services/)
 
 1. **Upload** — PDF parsed → overlapping chunks → language detection per chunk → embedded via Python service → bulk-indexed into Elasticsearch with metadata (title, source, category, language)
 2. **Attach** — User attaches a document to a chat session
-3. **Retrieve** — On each message:
-   - Detect query language
-   - If Chinese: translate to English for cross-lingual BM25 coverage
+3. **Query rewrite** — Follow-up questions are rewritten into standalone queries using the last 10 turns of conversation history (in-memory, with DB fallback after server restart). First-turn queries pass through unchanged.
+4. **Agentic retrieval loop** (up to 3 rounds):
+   - Detect query language; if Chinese, translate to English for BM25 coverage
    - Run BM25 + kNN in parallel; fuse with weighted RRF (semantic: 0.6, fulltext: 0.4)
-4. **Rerank** — Top-20 candidates passed to cross-encoder reranker → top-5 returned
-5. **Augment** — Top-5 chunks injected as system prompt context into the LLM call
+   - Rerank top-20 candidates via cross-encoder → top-5 chunks
+   - LLM evaluates whether chunks are sufficient; if not, proposes a refined query for the next round
+   - Chunks are deduplicated and accumulated across rounds (capped at 15)
+5. **Answer** — LLM generates a cited answer from accumulated chunks; response is flagged `partial: true` if the loop exhausted all rounds without full confidence
 
 Elasticsearch is optional — if unavailable at startup, RAG is silently disabled and chat continues without document context.
 
@@ -222,9 +226,10 @@ All routes prefixed `/api/v1/`. Frontend proxies `/api/*` → `/api/v1/*`.
 
 ## Roadmap
 
-- [ ] Citation/source attribution — surface which document chunks grounded each answer
+- [x] Citation/source attribution — answer includes `citations` array with title, source, and chunk index for each referenced chunk
+- [x] Query rewriting — follow-up questions rewritten into standalone queries using conversation history (in-memory + DB fallback); first-turn queries pass through unchanged
+- [x] Agentic RAG — ReAct-style retrieval loop refines the search query across up to 3 rounds; accumulated chunks capped at 15; best-effort answer on exhaustion
 - [ ] Multi-tenant isolation — separate knowledge bases per organization with role-based access
-- [ ] Query rewriting — rewrite follow-up questions into standalone queries using conversation history
 - [x] Evaluation framework — Recall@5 and MRR across 4 retrieval strategies on 23 labeled Chinese healthcare queries (4 documents, ~12–16 chunks each; 56 total chunks)
   | Strategy | Recall@5 | MRR |
   |---|---|---|
