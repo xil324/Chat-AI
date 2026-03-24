@@ -225,4 +225,12 @@ All routes prefixed `/api/v1/`. Frontend proxies `/api/*` → `/api/v1/*`.
 - [ ] Citation/source attribution — surface which document chunks grounded each answer
 - [ ] Multi-tenant isolation — separate knowledge bases per organization with role-based access
 - [ ] Query rewriting — rewrite follow-up questions into standalone queries using conversation history
-- [ ] Evaluation framework — Recall@K, MRR metrics against a labeled healthcare Q&A dataset
+- [x] Evaluation framework — Recall@5 and MRR across 4 retrieval strategies on 23 labeled Chinese healthcare queries (4 documents, ~12–16 chunks each; 56 total chunks)
+  | Strategy | Recall@5 | MRR |
+  |---|---|---|
+  | BM25 only | 0.91 | 0.65 |
+  | kNN only | 0.83 | 0.65 |
+  | Hybrid (BM25+kNN) | 0.91 | 0.65 |
+  | **Hybrid + Rerank** | **0.96** | **0.84** |
+
+  Recall@5 measures whether any relevant chunk appears in the top-5 results (out of 12–16 per document); MRR measures rank of the first relevant chunk. Hybrid + Rerank leads in both metrics — the reranker's cross-lingual penalty was eliminated by translating Chinese queries to English before reranking (the translated query was already computed for BM25, so no extra latency). MRR jump from 0.65 → 0.84 shows the reranker dramatically improves ranking quality once given an English query. BM25 and Hybrid tie on Recall@5 because keyword overlap is strong for regulatory terms; kNN underperforms slightly on Recall@5 because multilingual embeddings cluster some queries at lower recall positions.

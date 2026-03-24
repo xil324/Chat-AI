@@ -109,7 +109,7 @@ export async function retrieveChunks(query, documentId) {
   const candidates    = filteredIds.map(id => idToContent[id]);
   const candidateMeta = filteredIds.map(id => idToMeta[id]);
 
-  const reranked = await rerank(query, candidates, TOP_K);
+  const reranked = await rerank(searchQuery, candidates, TOP_K);
 
   // r.index is a position in filteredIds/candidates, NOT in topIds
   return reranked.map(r => ({
