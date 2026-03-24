@@ -49,12 +49,10 @@ export class AgenticRAGPipeline {
 				);
 				evaluation = parseEvaluation(raw);
 			} catch {
-				// LLM call failed this round — continue to next round or fall through to best-effort
 				continue;
 			}
 
 			if (evaluation.sufficient) {
-				// allChunks must not be mutated between _buildEvaluationPrompt and _mapCitations
 				return {
 					answer: evaluation.answer,
 					citations: this._mapCitations(evaluation.citations || [], allChunks),
@@ -70,6 +68,11 @@ export class AgenticRAGPipeline {
 		return this._generateBestEffort(userQuery, allChunks);
 	}
 
+	/**
+	 * Remove duplicate chunks by chunkId, preserving first-seen order.
+	 * @param {Array} chunks - Combined chunk array (may contain duplicates)
+	 * @returns {Array} Deduplicated chunks
+	 */
 	_deduplicateChunks(chunks) {
 		const seen = new Set();
 		return chunks.filter((c) => {
@@ -79,6 +82,13 @@ export class AgenticRAGPipeline {
 		});
 	}
 
+	/**
+	 * Build the LLM prompt that asks the model to evaluate whether the retrieved
+	 * chunks are sufficient to answer the question, or to suggest a refined query.
+	 * @param {string} userQuery - Original user question
+	 * @param {Array}  chunks    - Currently accumulated chunks (deduplicated)
+	 * @returns {string} Prompt string
+	 */
 	_buildEvaluationPrompt(userQuery, chunks) {
 		const context = chunks
 			.map(
@@ -90,6 +100,13 @@ export class AgenticRAGPipeline {
 		return `Context from knowledge base:\n${context}\n\nUser question: ${userQuery}\n\nInstructions:\n1. Evaluate whether the provided context contains enough information to answer.\n2. Answer in the same language as the user's question.\n3. Only use information from the provided context.\n4. Cite sources using [1], [2], etc. for every claim.\n5. If information is insufficient, provide a refined search query.\n\nRespond ONLY with valid JSON:\n{\n  "sufficient": true | false,\n  "answer": "Your cited answer (only if sufficient)",\n  "citations": [\n    { "index": 1, "title": "...", "source": "..." }\n  ],\n  "refined_query": "Better search query (only if not sufficient)",\n  "missing_info": "What information is missing (only if not sufficient)"\n}`;
 	}
 
+	/**
+	 * Resolve citation indices returned by the LLM to full chunk metadata.
+	 * Index 1 in the LLM response corresponds to allChunks[0].
+	 * @param {Array<{index: number}>} citationIndices - Citations from LLM evaluation
+	 * @param {Array} allChunks       - Accumulated chunks in prompt order
+	 * @returns {Array<{index, title, source, url}>}
+	 */
 	_mapCitations(citationIndices, allChunks) {
 		return citationIndices.map((c) => ({
 			index: c.index,
@@ -99,6 +116,13 @@ export class AgenticRAGPipeline {
 		}));
 	}
 
+	/**
+	 * Fallback after MAX_ROUNDS: ask the LLM to answer with whatever chunks were
+	 * collected, flagging the response as partial.
+	 * @param {string} userQuery  - Original user question
+	 * @param {Array}  allChunks  - All accumulated chunks across rounds
+	 * @returns {{ answer, citations, rounds, chunksUsed, partial }}
+	 */
 	async _generateBestEffort(userQuery, allChunks) {
 		const context = allChunks
 			.map(
@@ -134,6 +158,12 @@ export class AgenticRAGPipeline {
 	}
 }
 
+/**
+ * Parse the LLM's JSON evaluation response, stripping markdown code fences if present.
+ * Falls back to a best-effort object using the raw string as the answer if JSON parsing fails.
+ * @param {string} llmOutputString - Raw LLM output
+ * @returns {{ sufficient: boolean, answer: string, citations: Array, refined_query: string|null }}
+ */
 export function parseEvaluation(llmOutputString) {
 	try {
 		const cleaned = llmOutputString

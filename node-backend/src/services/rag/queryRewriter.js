@@ -7,10 +7,16 @@ export class QueryRewriter {
 
 	/**
 	 * Rewrite a follow-up query into a standalone question using session history.
+	 * Returns the original query unchanged if there is no history or the LLM call fails.
 	 *
 	 * NOTE: In-memory history is lost on server restart. The DB fallback covers subsequent
 	 * turns if messages were persisted, but adds one extra DB read per agentic turn.
 	 * A proper session hydration on startup (Phase 8) would eliminate this extra read.
+	 *
+	 * @param {string} currentQuery    - The user's latest message
+	 * @param {Array}  inMemoryHistory - Conversation turns held in memory ([{role, content}])
+	 * @param {string} sessionId       - Session ID used for DB fallback lookup
+	 * @returns {Promise<string>} Rewritten standalone query, or original if rewriting is not needed
 	 */
 	async rewrite(currentQuery, inMemoryHistory, sessionId) {
 		const recentTurns = await this._getRecentTurns(inMemoryHistory, sessionId);
@@ -42,8 +48,14 @@ Rewritten query:`;
 		}
 	}
 
+	/**
+	 * Return the last 10 conversation turns, preferring in-memory history and
+	 * falling back to a DB read if memory is empty (e.g. after a server restart).
+	 * @param {Array}  inMemoryHistory - In-memory conversation turns ([{role, content}])
+	 * @param {string} sessionId       - Session ID for DB lookup
+	 * @returns {Promise<Array<{role: string, content: string}>>}
+	 */
 	async _getRecentTurns(inMemoryHistory, sessionId) {
-		// Try in-memory first
 		if (inMemoryHistory && inMemoryHistory.length > 0) {
 			return inMemoryHistory.slice(-10);
 		}

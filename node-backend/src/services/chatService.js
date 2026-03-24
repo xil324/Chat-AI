@@ -61,8 +61,6 @@ export async function sendNewSession(userName, question, modelType) {
 		updated_at: new Date(),
 	});
 
-	// sendNewSession always uses the non-agentic path regardless of document state.
-	// The session has no attached_document_id at creation time.
 	const helper = aiHelperManager.getOrCreate(userName, sessionId, modelType);
 	const reply = await helper.generateResponse(question);
 
@@ -81,7 +79,6 @@ export async function sendMessage(userName, sessionId, question, modelType) {
 	}
 
 	if (session?.attached_document_id) {
-		// agentic-rewrite query path
 		const llmModel = createAIModel(modelType);
 		const rewriter = new QueryRewriter(llmModel);
 		const pipeline = new AgenticRAGPipeline(llmModel);
