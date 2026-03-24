@@ -6,3 +6,5 @@ CLAUDE.md
 .claude/
 elasticsearch*.tar.gz
 elasticsearch-*/
+eval/results.json
+eval/seed-doc-ids.json

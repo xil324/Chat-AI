@@ -20,6 +20,9 @@ import { initElasticsearch, es, CHUNK_INDEX } from '../src/utils/ragHelper/esCli
 import { splitTextWithOverlap, detectLanguage } from '../src/utils/ragHelper/chunker.js';
 import { embedBatch } from '../src/utils/ragHelper/embeddingModel.js';
 import Document from '../src/models/Document.js';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
 
 const TARGET_USER = process.argv[2] || 'admin';
 
@@ -264,8 +267,18 @@ async function main() {
     process.exit(1);
   }
 
+  const DOC_KEY_MAP = {
+    'CHIP Program Overview — Texas':                                         'chip',
+    'Texas Medicaid — Eligibility and Benefits Overview':                   'medicaid',
+    'How to File a Health Insurance Complaint — Texas Department of Insurance': 'tdi',
+    'Premium Tax Credits and ACA Marketplace Insurance — Overview':         'aca',
+  };
+  const docIdMap = {};
+
   for (const doc of DOCUMENTS) {
     const docId = uuidv4();
+    const key = DOC_KEY_MAP[doc.title];
+    if (key) docIdMap[key] = docId;
     const text = doc.content.trim();
     const chunks = splitTextWithOverlap(text);
     const docLanguage = detectLanguage(text);
@@ -307,6 +320,15 @@ async function main() {
 
     console.log(`  ✓ Saved "${doc.title}" (id: ${docId})`);
   }
+
+  const __seedDirname = path.dirname(fileURLToPath(import.meta.url));
+  const evalDir = path.resolve(__seedDirname, '../../eval');
+  fs.mkdirSync(evalDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(evalDir, 'seed-doc-ids.json'),
+    JSON.stringify(docIdMap, null, 2)
+  );
+  console.log('\nWrote eval/seed-doc-ids.json:', docIdMap);
 
   console.log('\nSeeding complete.');
   await mongoose.disconnect();

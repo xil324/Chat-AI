@@ -113,11 +113,12 @@ export async function retrieveChunks(query, documentId) {
 
   // r.index is a position in filteredIds/candidates, NOT in topIds
   return reranked.map(r => ({
-    chunkId: filteredIds[r.index],
-    content: r.passage,
-    title:   candidateMeta[r.index]?.title  || '',
-    source:  candidateMeta[r.index]?.source || '',
-    url:     candidateMeta[r.index]?.url    || null,
+    chunkId:    filteredIds[r.index],
+    content:    r.passage,
+    chunkIndex: candidateMeta[r.index]?.chunkIndex ?? null,
+    title:      candidateMeta[r.index]?.title  || '',
+    source:     candidateMeta[r.index]?.source || '',
+    url:        candidateMeta[r.index]?.url    || null,
   }));
 }
 
@@ -128,4 +129,151 @@ export async function retrieveContext(query, documentId) {
   if (!esAvailable) return '';
   const chunks = await retrieveChunks(query, documentId);
   return chunks.map(c => c.content).join('\n\n---\n\n');
+}
+
+/**
+ * BM25-only retrieval — no embedding, no fusion, no reranker.
+ * Safe to run without the embedding service (port 8001).
+ */
+export async function retrieveChunksBM25Only(query, documentId) {
+  if (!esAvailable) return [];
+
+  const queryLang = detectLanguage(query);
+  const searchQuery = queryLang === 'zh'
+    ? await translateToEnglish(query)
+    : query;
+
+  const response = await es.search({
+    index: CHUNK_INDEX,
+    query: {
+      bool: {
+        must: [{ multi_match: { query: searchQuery, fields: ['content', 'content_en', 'content_zh'] } }],
+        filter: [{ term: { doc_id: documentId } }],
+      },
+    },
+    size: TOP_K,
+    _source: ['content', 'title', 'source', 'chunk_index'],
+  });
+
+  return response.hits.hits.map(hit => ({
+    chunkId:    hit._id,
+    content:    hit._source.content,
+    chunkIndex: hit._source.chunk_index,
+    title:      hit._source.title  || '',
+    source:     hit._source.source || '',
+    url:        null,
+  }));
+}
+
+/**
+ * kNN-only retrieval — no translation, no BM25, no reranker.
+ * Uses the original query (not translated) for semantic search.
+ */
+export async function retrieveChunksKNNOnly(query, documentId) {
+  if (!esAvailable) return [];
+
+  const queryVector = await embed(query);
+
+  const response = await es.search({
+    index: CHUNK_INDEX,
+    knn: {
+      field: 'embedding',
+      query_vector: queryVector,
+      k: TOP_K,
+      num_candidates: 100,
+      filter: { term: { doc_id: documentId } },
+    },
+    size: TOP_K,
+    _source: ['content', 'title', 'source', 'chunk_index'],
+  });
+
+  return response.hits.hits.map(hit => ({
+    chunkId:    hit._id,
+    content:    hit._source.content,
+    chunkIndex: hit._source.chunk_index,
+    title:      hit._source.title  || '',
+    source:     hit._source.source || '',
+    url:        null,
+  }));
+}
+
+/**
+ * Hybrid retrieval (BM25 + kNN weighted RRF) without the reranker.
+ * Uses the exact same RRF formula as retrieveChunks so the eval
+ * comparison isolates the reranker's contribution.
+ */
+export async function retrieveChunksHybridOnly(query, documentId) {
+  if (!esAvailable) return [];
+
+  const queryLang = detectLanguage(query);
+  const searchQuery = queryLang === 'zh'
+    ? await translateToEnglish(query)
+    : query;
+
+  const queryVector = await embed(query);
+
+  const [bm25Response, knnResponse] = await Promise.all([
+    es.search({
+      index: CHUNK_INDEX,
+      query: {
+        bool: {
+          must: [{ multi_match: { query: searchQuery, fields: ['content', 'content_en', 'content_zh'] } }],
+          filter: [{ term: { doc_id: documentId } }],
+        },
+      },
+      size: SEARCH_SIZE,
+      _source: ['content', 'title', 'source', 'chunk_index'],
+    }),
+    es.search({
+      index: CHUNK_INDEX,
+      knn: {
+        field: 'embedding',
+        query_vector: queryVector,
+        k: SEARCH_SIZE,
+        num_candidates: 100,
+        filter: { term: { doc_id: documentId } },
+      },
+      size: SEARCH_SIZE,
+      _source: ['content', 'title', 'source', 'chunk_index'],
+    }),
+  ]);
+
+  const fusionScore = {};
+  const idToContent = {};
+  const idToMeta    = {};
+
+  bm25Response.hits.hits.forEach((hit, idx) => {
+    fusionScore[hit._id] = (fusionScore[hit._id] || 0) + WEIGHTS.fulltext / (idx + RRF_K);
+    idToContent[hit._id] = hit._source.content;
+    idToMeta[hit._id] = {
+      chunkIndex: hit._source.chunk_index,
+      title:      hit._source.title  || '',
+      source:     hit._source.source || '',
+    };
+  });
+
+  knnResponse.hits.hits.forEach((hit, idx) => {
+    fusionScore[hit._id] = (fusionScore[hit._id] || 0) + WEIGHTS.semantic / (idx + RRF_K);
+    idToContent[hit._id] = hit._source.content;
+    idToMeta[hit._id] = idToMeta[hit._id] || {
+      chunkIndex: hit._source.chunk_index,
+      title:      hit._source.title  || '',
+      source:     hit._source.source || '',
+    };
+  });
+
+  const topIds = Object.entries(fusionScore)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TOP_K)
+    .map(([id]) => id)
+    .filter(id => idToContent[id]);
+
+  return topIds.map(id => ({
+    chunkId:    id,
+    content:    idToContent[id],
+    chunkIndex: idToMeta[id]?.chunkIndex ?? null,
+    title:      idToMeta[id]?.title  || '',
+    source:     idToMeta[id]?.source || '',
+    url:        null,
+  }));
 }
