@@ -7,6 +7,7 @@ import { initRedis } from './src/utils/redis.js';
 import { initElasticsearch } from './src/utils/ragHelper/esClient.js';
 import { aiHelperManager } from './src/utils/aihelper/AIHelperManager.js';
 import { getAllMessages } from './src/dao/messageDao.js';
+import { startDocumentIngestionWorkers } from './src/services/documentIngestionService.js';
 import userRouter from './src/routes/user.js';
 import chatRouter from './src/routes/chat.js';
 import documentRouter from './src/routes/document.js';
@@ -27,6 +28,7 @@ async function main() {
   await readDataFromDB();
   initRedis();
   await initElasticsearch();
+  await startDocumentIngestionWorkers();
 
   const app = express();
   app.use(cors());

@@ -5,7 +5,9 @@ import { fileURLToPath } from "url";
 import { auth } from "../middleware/auth.js";
 import {
 	handleUpload,
+	handleImportWeb,
 	handleList,
+	handleStatus,
 	handleDelete,
 	handleAttach,
 	handleDetach,
@@ -35,7 +37,9 @@ router.post(
 	},
 	handleUpload,
 );
+router.post("/web", handleImportWeb);
 router.get("/list", handleList);
+router.get("/:id/status", handleStatus);
 router.delete("/:id", handleDelete);
 router.post("/attach", handleAttach);
 router.post("/detach", handleDetach);

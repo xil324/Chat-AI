@@ -1,10 +1,26 @@
-import { getSessions, sendNewSession, sendMessage, getHistory } from '../services/chatService.js';
+import {
+  getSessions,
+  createEmptySession,
+  sendNewSession,
+  sendMessage,
+  getHistory,
+} from '../services/chatService.js';
 
 export async function handleGetSessions(req, res) {
   const userName = req.user.username;
   try {
     const sessions = await getSessions(userName);
     return res.status(200).json({ sessions });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleCreateEmptySession(req, res) {
+  const userName = req.user.username;
+  try {
+    const result = await createEmptySession(userName);
+    return res.status(201).json(result);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

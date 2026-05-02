@@ -50,6 +50,24 @@ export async function getSessions(userName) {
 	return enrichWithDocumentName(result);
 }
 
+export async function createEmptySession(userName) {
+	const sessionId = uuidv4();
+
+	await createSession({
+		id: sessionId,
+		user_name: userName,
+		title: "New chat",
+		created_at: new Date(),
+		updated_at: new Date(),
+	});
+
+	return {
+		sessionId,
+		name: "New chat",
+		attachedDocumentId: null,
+	};
+}
+
 export async function sendNewSession(userName, question, modelType) {
 	const sessionId = uuidv4();
 

@@ -48,7 +48,8 @@ export class AgenticRAGPipeline {
 					null,
 				);
 				evaluation = parseEvaluation(raw);
-			} catch {
+			} catch (err) {
+				console.error("RAG evaluation step failed:", err);
 				continue;
 			}
 
@@ -97,7 +98,7 @@ export class AgenticRAGPipeline {
 			)
 			.join("\n\n");
 
-		return `Context from knowledge base:\n${context}\n\nUser question: ${userQuery}\n\nInstructions:\n1. Evaluate whether the provided context contains enough information to answer.\n2. Answer in the same language as the user's question.\n3. Only use information from the provided context.\n4. Cite sources using [1], [2], etc. for every claim.\n5. If information is insufficient, provide a refined search query.\n\nRespond ONLY with valid JSON:\n{\n  "sufficient": true | false,\n  "answer": "Your cited answer (only if sufficient)",\n  "citations": [\n    { "index": 1, "title": "...", "source": "..." }\n  ],\n  "refined_query": "Better search query (only if not sufficient)",\n  "missing_info": "What information is missing (only if not sufficient)"\n}`;
+		return `Context from knowledge base:\n${context}\n\nUser question: ${userQuery}\n\nInstructions:\n1. Evaluate whether the provided context contains enough information to answer.\n2. Answer in the same language as the user's question.\n3. Only use information from the provided context.\n4. Cite sources using [1], [2], etc. for every claim.\n5. If information is insufficient, provide a refined search query.\n\nReturn ONLY a valid JSON object. Do not add markdown, explanation, headings, or any text before or after the JSON.\n{\n  "sufficient": true | false,\n  "answer": "Your cited answer (only if sufficient)",\n  "citations": [\n    { "index": 1, "title": "...", "source": "..." }\n  ],\n  "refined_query": "Better search query (only if not sufficient)",\n  "missing_info": "What information is missing (only if not sufficient)"\n}`;
 	}
 
 	/**
@@ -131,7 +132,7 @@ export class AgenticRAGPipeline {
 			)
 			.join("\n\n");
 
-		const prompt = `Context from knowledge base:\n${context}\n\nUser question: ${userQuery}\n\nInstructions:\n1. Answer with available information. If incomplete, clearly state what could not be found.\n2. Answer in the same language as the user's question.\n3. Cite sources using [1], [2], etc. for every claim you can support.\n\nRespond ONLY with valid JSON:\n{\n  "sufficient": true,\n  "answer": "...",\n  "citations": [{ "index": 1, "title": "...", "source": "..." }]\n}`;
+		const prompt = `Context from knowledge base:\n${context}\n\nUser question: ${userQuery}\n\nInstructions:\n1. Answer with available information. If incomplete, clearly state what could not be found.\n2. Answer in the same language as the user's question.\n3. Cite sources using [1], [2], etc. for every claim you can support.\n\nReturn ONLY a valid JSON object. Do not add markdown, explanation, headings, or any text before or after the JSON.\n{\n  "sufficient": true,\n  "answer": "...",\n  "citations": [{ "index": 1, "title": "...", "source": "..." }]\n}`;
 
 		try {
 			const raw = await this.llmModel.generateResponse(
@@ -146,7 +147,8 @@ export class AgenticRAGPipeline {
 				chunksUsed: allChunks.length,
 				partial: true,
 			};
-		} catch {
+		} catch (err) {
+			console.error("RAG best-effort generation failed:", err);
 			return {
 				answer: "Unable to generate a response with the available documents.",
 				citations: [],
@@ -165,16 +167,31 @@ export class AgenticRAGPipeline {
  * @returns {{ sufficient: boolean, answer: string, citations: Array, refined_query: string|null }}
  */
 export function parseEvaluation(llmOutputString) {
+	const cleaned = String(llmOutputString || "")
+		.replace(/```json\n?/g, "")
+		.replace(/```\n?/g, "")
+		.trim();
+
 	try {
-		const cleaned = llmOutputString
-			.replace(/```json\n?/g, "")
-			.replace(/```\n?/g, "")
-			.trim();
 		return JSON.parse(cleaned);
 	} catch {
+		const firstBrace = cleaned.indexOf("{");
+		const lastBrace = cleaned.lastIndexOf("}");
+
+		if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+			const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+			try {
+				return JSON.parse(candidate);
+			} catch {
+				console.warn("LLM returned non-parseable JSON payload");
+			}
+		} else {
+			console.warn("LLM returned non-JSON response");
+		}
+
 		return {
 			sufficient: true,
-			answer: llmOutputString,
+			answer: cleaned,
 			citations: [],
 			refined_query: null,
 		};

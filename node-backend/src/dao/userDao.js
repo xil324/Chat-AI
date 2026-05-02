@@ -1,11 +1,11 @@
 import User from '../models/User.js';
 
 export async function getUserByUsername(username) {
-  return User.findOne({ username });
+  return User.findOne({ username }).lean();
 }
 
 export async function getUserByEmail(email) {
-  return User.findOne({ email });
+  return User.findOne({ email }).lean();
 }
 
 export async function insertUser(userData) {

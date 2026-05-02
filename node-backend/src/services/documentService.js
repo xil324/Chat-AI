@@ -1,118 +1,206 @@
-import { v4 as uuidv4 } from 'uuid';
-import { unlink, rename } from 'fs/promises';
-import { join, dirname, parse as parsePath } from 'path';
-import { fileURLToPath } from 'url';
-import { extractTextFromPDF } from '../utils/ragHelper/pdfParser.js';
-import { splitTextWithOverlap, detectLanguage } from '../utils/ragHelper/chunker.js';
-import { embedBatch } from '../utils/ragHelper/embeddingModel.js';
-import { es, CHUNK_INDEX } from '../utils/ragHelper/esClient.js';
+import { v4 as uuidv4 } from "uuid";
+import { createHash } from "crypto";
+import { mkdir, readFile, unlink, rename, writeFile } from "fs/promises";
+import { join, dirname, parse as parsePath } from "path";
+import { fileURLToPath } from "url";
+import { es, CHUNK_INDEX } from "../utils/ragHelper/esClient.js";
 import {
-  createDocument,
-  getDocumentsByUserName,
-  getDocumentById,
-  deleteDocument as deleteDocumentFromDB,
-} from '../dao/documentDao.js';
+	createDocument,
+	getDocumentsByUserName,
+	getDocumentById,
+	getDocumentByHash,
+	getDocumentBySourceUrl,
+	deleteDocument as deleteDocumentFromDB,
+} from "../dao/documentDao.js";
 import {
-  getSessionById,
-  updateAttachedDocument,
-  clearAttachedDocument,
-} from '../dao/sessionDao.js';
+	getSessionById,
+	updateAttachedDocument,
+	clearAttachedDocument,
+} from "../dao/sessionDao.js";
+import {
+	enqueueDocumentIngestion,
+	removeDocumentIngestionMarkers,
+} from "./documentIngestionService.js";
+import { fetchWebDocument } from "./webConnectorService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const UPLOADS_DIR = join(__dirname, '../../uploads');
+const UPLOADS_DIR = join(__dirname, "../../uploads");
+
+function createHttpError(message, status) {
+	const err = new Error(message);
+	err.status = status;
+	return err;
+}
+
+function toDocumentResponse(doc, extra = {}) {
+	return {
+		id: doc.id,
+		filename: doc.filename,
+		title: doc.title,
+		source: doc.source,
+		source_url: doc.source_url || null,
+		source_type: doc.source_type || "upload",
+		source_last_modified: doc.source_last_modified || null,
+		source_etag: doc.source_etag || null,
+		last_synced_at: doc.last_synced_at || null,
+		category: doc.category,
+		language: doc.language,
+		ingestion_status: doc.ingestion_status || "pending",
+		ingestion_error: doc.ingestion_error || null,
+		ingestion_attempts: doc.ingestion_attempts || 0,
+		ingested_at: doc.ingested_at || null,
+		created_at: doc.created_at,
+		updated_at: doc.updated_at,
+		...extra,
+	};
+}
+
+async function hashFile(filePath) {
+	const buffer = await readFile(filePath);
+	return createHash("sha256").update(buffer).digest("hex");
+}
 
 export async function uploadDocument(userName, file, meta = {}) {
-  const docId = uuidv4();
-  const filename = file.originalname;
-  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 200);
-  const filePath = join(UPLOADS_DIR, `${docId}_${safeName}`);
+	const docId = uuidv4();
+	const filename = file.originalname;
+	const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+	const filePath = join(UPLOADS_DIR, `${docId}_${safeName}`);
 
-  await rename(file.path, filePath);
+	await rename(file.path, filePath);
+	const contentHash = await hashFile(filePath);
+	const duplicate = await getDocumentByHash(userName, contentHash);
 
-  const { text } = await extractTextFromPDF(filePath);
-  const docLanguage = detectLanguage(text);
-  const chunks = splitTextWithOverlap(text);
-  const vectors = await embedBatch(chunks.map(c => c.content));
+	if (duplicate) {
+		await unlink(filePath).catch(() => {});
+		return toDocumentResponse(duplicate, { deduplicated: true });
+	}
 
-  // Title defaults to filename without extension
-  const title = meta.title || parsePath(filename).name.replace(/[_-]/g, ' ');
-  const source = meta.source || null;
-  const category = meta.category || null;
+	// Title defaults to filename without extension
+	const title = meta.title || parsePath(filename).name.replace(/[_-]/g, " ");
+	const source = meta.source || null;
+	const category = meta.category || null;
 
-  const operations = chunks.flatMap((chunk, idx) => [
-    { index: { _index: CHUNK_INDEX } },
-    {
-      doc_id:      docId,
-      user_name:   userName,
-      chunk_index: idx,
-      content:     chunk.content,
-      content_en:  chunk.language === 'en' || chunk.language === 'mixed' ? chunk.content : '',
-      content_zh:  chunk.language === 'zh' || chunk.language === 'mixed' ? chunk.content : '',
-      embedding:   vectors[idx],
-      title,
-      source,
-      category,
-      language:    chunk.language,
-    },
-  ]);
+	const doc = await createDocument({
+		id: docId,
+		user_name: userName,
+		filename,
+		file_path: filePath,
+		title,
+		source,
+		source_type: meta.source_type || "upload",
+		category,
+		language: null,
+		content_hash: contentHash,
+		ingestion_status: "pending",
+		ingestion_error: null,
+		ingestion_attempts: 0,
+		last_enqueued_at: new Date(),
+		created_at: new Date(),
+		updated_at: new Date(),
+	});
+	await enqueueDocumentIngestion(docId);
 
-  if (operations.length > 0) {
-    await es.bulk({ operations, refresh: false });
-  }
+	return toDocumentResponse(doc);
+}
 
-  await createDocument({
-    id: docId,
-    user_name: userName,
-    filename,
-    file_path: filePath,
-    title,
-    source,
-    category,
-    language: docLanguage,
-    created_at: new Date(),
-  });
+export async function importWebDocument(userName, url, meta = {}) {
+	const fetched = await fetchWebDocument(url);
+	const existingByUrl = await getDocumentBySourceUrl(userName, fetched.url);
 
-  return { id: docId, filename, title, language: docLanguage };
+	if (existingByUrl?.content_hash === fetched.contentHash) {
+		return toDocumentResponse(existingByUrl, {
+			deduplicated: true,
+			not_modified: true,
+		});
+	}
+
+	const duplicate = await getDocumentByHash(userName, fetched.contentHash);
+	if (duplicate) {
+		return toDocumentResponse(duplicate, { deduplicated: true });
+	}
+
+	const docId = uuidv4();
+	const title = meta.title || fetched.title || fetched.url;
+	const safeName = title.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+	const filename = `${safeName || "web-document"}.txt`;
+	const filePath = join(UPLOADS_DIR, `${docId}_${filename}`);
+
+	await mkdir(UPLOADS_DIR, { recursive: true });
+	await writeFile(filePath, fetched.text, "utf8");
+
+	const now = new Date();
+	const doc = await createDocument({
+		id: docId,
+		user_name: userName,
+		filename,
+		file_path: filePath,
+		title,
+		source: meta.source || new URL(fetched.url).hostname,
+		source_url: fetched.url,
+		source_type: "web",
+		source_last_modified: fetched.sourceLastModified,
+		source_etag: fetched.sourceEtag,
+		last_synced_at: now,
+		category: meta.category || null,
+		language: null,
+		content_hash: fetched.contentHash,
+		ingestion_status: "pending",
+		ingestion_error: null,
+		ingestion_attempts: 0,
+		last_enqueued_at: now,
+		created_at: now,
+		updated_at: now,
+	});
+	await enqueueDocumentIngestion(docId);
+
+	return toDocumentResponse(doc);
 }
 
 export async function listDocuments(userName) {
-  const docs = await getDocumentsByUserName(userName);
-  return docs?.map(d => ({
-    id: d.id,
-    filename: d.filename,
-    title: d.title,
-    source: d.source,
-    category: d.category,
-    language: d.language,
-    created_at: d.created_at,
-  }));
+	const docs = await getDocumentsByUserName(userName);
+	return docs?.map((doc) => toDocumentResponse(doc));
+}
+
+export async function getDocumentStatusById(userName, documentId) {
+	const doc = await getDocumentById(documentId);
+	if (!doc) throw createHttpError("Document not found", 404);
+	if (doc.user_name !== userName) throw createHttpError("Forbidden", 403);
+	return toDocumentResponse(doc);
 }
 
 export async function deleteDocumentById(userName, documentId) {
-  const doc = await getDocumentById(documentId);
-  if (!doc) throw Object.assign(new Error('Document not found'), { status: 404 });
-  if (doc.user_name !== userName) throw Object.assign(new Error('Forbidden'), { status: 403 });
+	const doc = await getDocumentById(documentId);
+	if (!doc) throw createHttpError("Document not found", 404);
+	if (doc.user_name !== userName) throw createHttpError("Forbidden", 403);
 
-  await es.deleteByQuery({
-    index: CHUNK_INDEX,
-    query: { term: { doc_id: documentId } },
-    refresh: true,
-  });
+	await removeDocumentIngestionMarkers(documentId);
 
-  await unlink(doc.file_path).catch(() => {});
-  await deleteDocumentFromDB(documentId);
+	await es.deleteByQuery({
+		index: CHUNK_INDEX,
+		query: { term: { doc_id: documentId } },
+		refresh: true,
+	});
+
+	await unlink(doc.file_path).catch(() => {});
+	await deleteDocumentFromDB(documentId);
 }
 
 export async function attachDocumentToSession(userName, sessionId, documentId) {
-  const doc = await getDocumentById(documentId);
-  if (!doc) throw Object.assign(new Error('Document not found'), { status: 404 });
-  if (doc.user_name !== userName) throw Object.assign(new Error('Forbidden'), { status: 403 });
-  await updateAttachedDocument(sessionId, documentId);
+	const doc = await getDocumentById(documentId);
+	if (!doc) throw createHttpError("Document not found", 404);
+	if (doc.user_name !== userName) throw createHttpError("Forbidden", 403);
+	if (doc.ingestion_status !== "done") {
+		throw createHttpError(
+			"Document is still processing and cannot be attached yet",
+			409,
+		);
+	}
+	await updateAttachedDocument(sessionId, documentId);
 }
 
 export async function detachDocumentFromSession(userName, sessionId) {
-  const session = await getSessionById(sessionId);
-  if (!session) throw Object.assign(new Error('Session not found'), { status: 404 });
-  if (session.user_name !== userName) throw Object.assign(new Error('Forbidden'), { status: 403 });
-  await clearAttachedDocument(sessionId);
+	const session = await getSessionById(sessionId);
+	if (!session) throw createHttpError("Session not found", 404);
+	if (session.user_name !== userName) throw createHttpError("Forbidden", 403);
+	await clearAttachedDocument(sessionId);
 }

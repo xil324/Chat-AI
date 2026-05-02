@@ -1,0 +1,66 @@
+How to Use Form 1095-A, Health Insurance Marketplace® Statement | HealthCare.gov Skip to main content Official websites use .gov 
+A .gov website belongs to an official government organization in the United States.
+Secure .gov websites use HTTPS 
+A lock ( ) or https:// means you&#x27;ve safely connected to the .gov website. Share sensitive information only on official, secure websites.
+How to use Form 1095-A
+If anyone in your household had a Marketplace plan in 2025, you should get Form 1095-A, Health Insurance Marketplace ® Statement, by mail no later than mid-February. This form comes from the Marketplace, not the Internal Revenue Service (IRS). It may be available in your Marketplace account anytime from mid-January to February 1.
+Notice: You must have your Form 1095-A before you file. Keep your 1095-A forms with your important tax information, like W-2 forms and other records.
+Don&#x27;t file your taxes  until you have an accurate 1095-A.
+Note:  If you can&#x27;t find your 1095-A in your Marketplace account,  contact the Marketplace Call Center .
+What’s on Form 1095-A and why you need it
+Your 1095-A has information about Marketplace plans any member of your household had in 2025, including: Premiums paid
+Premium tax credits used
+A figure called  “second lowest cost Silver plan” (SLCSP) Second lowest cost Silver plan 
+Affects the premium tax credit if you used it to lower your premiums during the year. Find the SLCSP on Form 1095-A, sent by the Marketplace annually, or use the HealthCare.gov tax tool. 
+If you had Marketplace coverage but didn&#x27;t use the  premium tax credit Premium tax credit 
+A tax credit you can use to lower your monthly insurance payment (your “premium”) 
+.
+You’ll use information from your 1095-A to fill out tax  Form 8962, Premium Tax Credit  (PDF, 115 KB). This is how you&#x27;ll " reconcile Reconcile 
+Use IRS Form 8962 to find out if you used the right amount of premium tax credit during the year. Use the form to compare the advance amount you use to the amount you qualify for based on your final income. If you used too much, you’ll repay it via taxes. If you used too little, claim the difference as a credit. 
+" — find out if there&#x27;s any difference between the premium tax credit you used and the amount you qualify for. Find instructions for Form 8962 (PDF, 393 KB).
+Learn more about Form 1095-A from the IRS. 
+Check that your 1095-A is correct
+Carefully read the instructions on the back.
+Make sure it’s correct. If anything about your coverage or household is wrong, contact the Marketplace Call Center at 1-800-318-2596 (TTY: 1-855-889-4325).
+Make sure the information about the second lowest cost Silver plan (SLCSP) is correct.
+I think my "monthly enrollment premium" is wrong. Your monthly enrollment premium
+Close 
+The "monthly enrollment premium" on Form 1095-A (Part III, Column A) may be different from the monthly premium you paid. This doesn&#x27;t always mean this amount is wrong because:
+Your plan included benefits in addition to the essential health benefits required by the health care law, like adult dental or vision benefits. In this case, the monthly enrollment premium on your Form 1095-A may show only the amount of your premium that applied to essential health benefits.
+You or a household member started or ended coverage mid-month. In this case, your Form 1095-A will show only the premium for the parts of the month you had coverage.
+You were enrolled in a stand-alone dental plan and a dependent under 18 was enrolled in it. In this case, the monthly enrollment premium on your Form 1095-A may be higher than you expect because it includes a portion of the dental plan premiums for pediatric benefits.
+If any of these applied, the premium on your 1095-A is probably correct. If you think it&#x27;s wrong, contact the Marketplace Call Center . If the form has errors, we&#x27;ll send you a corrected version.
+How to know if your second lowest cost Silver plan information is correct
+Look at Part III, column B of your 1095-A, titled “Monthly second lowest cost silver plan (SLCSP) premium.” It should show figures for each month any household member had the Marketplace plan.
+The SLCSP premium is  incorrect  if:
+Part III, Column B has a “0” or is blank for any month someone in your household had the Marketplace plan
+You had changes in your household that you didn’t tell the Marketplace about — like having a baby, moving, getting married or divorced, or losing a dependent
+If either applies to you, use our tax tool to get the premium for your second lowest cost Silver plan.
+How to find your 1095-A online
+Log into your Marketplace account and select your 2025 application —  not  your 2026 application.
+Select “Tax Forms" from the menu.
+Under "Your Form 1095-A," select "Download PDF." If a form has a “Corrected” status, download this corrected form instead of a previous version.
+Get screen-by-screen directions, with pictures  (PDF, 284 KB).
+Use the information from your 1095-A to reconcile
+Once you have an accurate 1095-A and second lowest cost Silver plan premium, you’re ready to fill out Form 8962, Premium Tax Credit.
+Get a step-by-step guide to reconciling your premium tax credit. 
+More Answers: Form 1095-A
+Why would I get more than one 1095-A? 
+Probably because one of these applies:
+You changed Marketplace plans during the year
+You updated your application with new information — like adding or removing a family member, or moving — that resulted in a new enrollment in your plan
+Different household members had different plans
+If there are more than 5 members on the same plan
+If you think you&#x27;re missing a 1095-A, or if any information looks incorrect, contact the Marketplace Call Center.
+What if I paid full price for a Marketplace plan? 
+You’ll get a 1095-A too. Part III, Column C should be blank or have the number “0.”
+If you want to check if you qualify for a premium tax credit based on your final income, complete Form 8962. If you  don&#x27;t  qualify for a premium tax credit, you don&#x27;t have to include Form 8962 when you file your taxes.
+Learn more about your taxes if you paid full price for a Marketplace plan. 
+What if I had a Marketplace plan for part of the year? 
+Your 1095-A should include information for only the months you had a Marketplace plan. If you think it’s wrong, contact the Marketplace Call Center.
+What if I get a corrected 1095-A, but already filed my tax return using an earlier version of the form? 
+You may need to file an amended return using the information on your corrected 1095-A. 
+How do I find a 1095-A for a previous year? 
+Select your application for the year you need, then select "Tax Forms" to get that year&#x27;s 1095-A.
+Learn about health coverage and your federal taxes. 
+Back to top

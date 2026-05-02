@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { auth } from '../middleware/auth.js';
 import {
   handleGetSessions,
+  handleCreateEmptySession,
   handleSendNewSession,
   handleSendMessage,
   handleGetHistory,
@@ -12,6 +13,7 @@ const router = Router();
 router.use(auth);
 
 router.get('/sessions', handleGetSessions);
+router.post('/session', handleCreateEmptySession);
 router.post('/send-new-session', handleSendNewSession);
 router.post('/send', handleSendMessage);
 router.post('/history', handleGetHistory);

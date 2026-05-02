@@ -1,11 +1,11 @@
 import Session from '../models/Session.js';
 
 export async function getSessionsByUserName(userName) {
-  return Session.find({ user_name: userName }).sort({ created_at: 1 });
+  return Session.find({ user_name: userName }).sort({ created_at: 1 }).lean();
 }
 
 export async function getSessionById(sessionId) {
-  return Session.findOne({ id: sessionId });
+  return Session.findOne({ id: sessionId }).lean();
 }
 
 export async function createSession(sessionData) {
